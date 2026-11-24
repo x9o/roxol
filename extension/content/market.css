@@ -1,0 +1,552 @@
+.roxol-market {
+  --roxol-paper: #f8f5ed;
+  --roxol-ink: #212a25;
+  --roxol-muted: #526157;
+  --roxol-line: #bfcac0;
+  --roxol-accent: #17604c;
+  --roxol-selected: #dcece3;
+  --roxol-up: #14634b;
+  --roxol-down: #9c3835;
+  color: var(--roxol-ink);
+  color-scheme: light;
+  font: 14px/1.4 "Trebuchet MS", sans-serif;
+}
+
+.dark-theme .roxol-market {
+  --roxol-paper: #17211c;
+  --roxol-ink: #edf2e9;
+  --roxol-muted: #bdc9bd;
+  --roxol-line: #4f6458;
+  --roxol-accent: #a4e0c7;
+  --roxol-selected: #30493a;
+  --roxol-up: #a4e0c7;
+  --roxol-down: #ffb6ab;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.light-theme) body:not(.light-theme) .roxol-market {
+    --roxol-paper: #17211c;
+    --roxol-ink: #edf2e9;
+    --roxol-muted: #bdc9bd;
+    --roxol-line: #4f6458;
+    --roxol-accent: #a4e0c7;
+    --roxol-selected: #30493a;
+    --roxol-up: #a4e0c7;
+    --roxol-down: #ffb6ab;
+    color-scheme: dark;
+  }
+}
+
+.roxol-market *, .roxol-market *::before, .roxol-market *::after { box-sizing: border-box; }
+.roxol-market [hidden] { display: none !important; }
+.roxol-market :focus-visible { outline: 2px solid var(--roxol-accent); outline-offset: 2px; }
+
+.roxol-item {
+  clear: both;
+  max-width: 100%;
+  margin: 4px 0 8px;
+  font: inherit;
+  color: inherit;
+  font-size: .875rem;
+}
+
+.roxol-item .roxol-item-value {
+  max-width: none;
+  margin: 0 0 6px;
+}
+
+.roxol-item-value .roxol-metric {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 2px 7px;
+}
+
+.roxol-item-value dd { font-size: 1.125em; }
+.roxol-item .roxol-badges { margin-bottom: 6px; }
+.roxol-value-content > .roxol-badges .roxol-badge:not(.roxol-icon-badge) {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: .8125rem;
+}
+.roxol-value-content > .roxol-badges [data-direction="up"] { color: var(--roxol-up); }
+.roxol-value-content > .roxol-badges [data-direction="down"] { color: var(--roxol-down); }
+
+.roxol-item-detail .roxol-value-content { flex-direction: column; align-items: flex-start; }
+.roxol-native-value {
+  display: flex;
+  align-items: center;
+  gap: .3em;
+  margin-bottom: 4px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.roxol-native-value .roxol-icon {
+  width: 1em;
+  height: 1em;
+  margin: 0;
+}
+
+.roxol-title-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: .08em;
+  width: 1.3em;
+  height: 1.3em;
+  margin-inline-start: .32em;
+  font-size: .62em;
+  color: inherit;
+  line-height: 1;
+}
+.roxol-title-link:is(:visited, :hover, :focus-visible) { color: inherit; }
+.roxol-profile-title-link { flex: none; margin-inline-start: 0; font-size: 1.125rem; }
+.roxol-view-trades {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  margin-inline-start: 8px;
+  padding: 3px 8px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  color: inherit;
+  font-size: .875rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.roxol-view-trades:is(:visited, :hover, :focus-visible) { color: inherit; }
+.roxol-view-trades:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+.roxol-view-trades:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.roxol-external-icon { position: relative; width: 1em; height: 1em; }
+.roxol-external-icon::before, .roxol-external-icon::after { content: ""; position: absolute; }
+.roxol-external-icon::before {
+  inset: .14em .14em 0 0;
+  border: .1em solid currentColor;
+  border-radius: .1em;
+  clip-path: polygon(0 0, 63% 0, 63% 33%, 100% 33%, 100% 100%, 0 100%);
+}
+.roxol-external-icon::after {
+  inset: 0 0 .33em .33em;
+  border-top: .1em solid currentColor;
+  border-right: .1em solid currentColor;
+  border-radius: .08em;
+  background: linear-gradient(-45deg, transparent 43%, currentColor 44% 56%, transparent 57%);
+}
+
+.roxol-item.roxol-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 2px 0 4px;
+  font-size: .8125rem;
+}
+
+.roxol-card .roxol-item-value { margin: 0; }
+.roxol-card .roxol-item-value dt { display: inline-flex; align-items: center; font-size: 0; }
+.roxol-card .roxol-item-value .roxol-icon { margin: 0; }
+.roxol-card-host.roxol-card-relative { position: relative; }
+.roxol-market :is(.roxol-button.roxol-history-trigger, .roxol-badge.roxol-icon-badge) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  color: var(--roxol-ink);
+  font: inherit;
+}
+.roxol-card .roxol-button.roxol-history-trigger {
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font-size: 0;
+}
+.roxol-card-host .roxol-card .roxol-button.roxol-history-trigger {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 6px;
+  inset-inline-end: 6px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / .2);
+}
+.roxol-market-symbol {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 13px;
+}
+.roxol-history-icon {
+  background:
+    linear-gradient(currentColor 0 0) left bottom / 3px 5px,
+    linear-gradient(currentColor 0 0) center bottom / 3px 9px,
+    linear-gradient(currentColor 0 0) right bottom / 3px 13px;
+  background-repeat: no-repeat;
+}
+.roxol-market-symbol:not(.roxol-history-icon) { background: currentColor; }
+.roxol-demand-icon {
+  clip-path: polygon(50% 0, 64% 24%, 65% 44%, 78% 33%, 88% 56%, 90% 77%, 80% 93%, 67% 100%, 57% 100%, 66% 82%, 49% 62%, 38% 80%, 43% 100%, 28% 96%, 14% 84%, 11% 66%, 24% 43%, 33% 56%, 43% 36%);
+}
+.roxol-trend-stable-icon { clip-path: inset(42% 0); }
+.roxol-trend-raising-icon, .roxol-trend-lowering-icon {
+  clip-path: polygon(58% 12%, 100% 12%, 100% 54%, 85% 54%, 85% 37%, 56% 66%, 35% 53%, 11% 82%, 0 72%, 32% 33%, 53% 46%, 74% 27%, 58% 27%);
+}
+.roxol-trend-lowering-icon { transform: scaleY(-1); }
+.roxol-trend-unstable-icon, .roxol-trend-fluctuating-icon {
+  clip-path: polygon(0 55%, 25% 25%, 48% 62%, 72% 20%, 100% 51%, 90% 63%, 75% 46%, 48% 90%, 23% 50%, 10% 67%);
+}
+
+.roxol-market.roxol-best-price-deals {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-inline-start: 8px;
+  vertical-align: middle;
+  font: inherit;
+  font-size: .75rem;
+  line-height: 1.4;
+}
+.roxol-deal {
+  padding: 2px 5px;
+  border: 1px solid var(--roxol-line);
+  border-radius: 5px;
+  background: var(--roxol-paper);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.roxol-metrics {
+  display: grid;
+  gap: 3px;
+  max-width: 320px;
+  margin: 0 0 6px;
+}
+
+.roxol-metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  column-gap: 6px;
+  flex-wrap: wrap;
+}
+
+.roxol-metric dt, .roxol-metric dd { margin: 0; padding: 0; }
+.roxol-metric dd { font-weight: bold; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.roxol-icon { display: inline-block; width: 14px; height: 14px; object-fit: contain; vertical-align: -2px; margin-inline-end: 4px; }
+.roxol-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 9px; }
+.roxol-badges, .roxol-player-badge-list { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 8px; padding: 0; list-style: none; }
+.roxol-badges:empty { display: none; }
+.roxol-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  border: 1px solid var(--roxol-line);
+  border-radius: 3px;
+  background: var(--roxol-paper);
+  color: var(--roxol-muted);
+  font-weight: 600;
+}
+.roxol-market [data-direction="up"] { color: var(--roxol-up); }
+.roxol-market [data-direction="down"] { color: var(--roxol-down); }
+.roxol-badge[data-tooltip]:is(:hover, :focus-visible)::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  inset-block-start: calc(100% + 4px);
+  inset-inline-start: 0;
+  z-index: 2;
+  width: 13rem;
+  max-width: 65vw;
+  padding: 7px;
+  border: 1px solid var(--roxol-line);
+  border-radius: 3px;
+  background: var(--roxol-paper);
+  color: var(--roxol-ink);
+  font-weight: 400;
+}
+
+.roxol-market .roxol-link {
+  color: var(--roxol-accent);
+  text-decoration: underline;
+  text-underline-offset: .18em;
+  overflow-wrap: anywhere;
+}
+
+.roxol-market .roxol-button {
+  padding: 3px 7px;
+  min-height: 26px;
+  border: 1px solid var(--roxol-line);
+  border-radius: 3px;
+  background: var(--roxol-paper);
+  color: var(--roxol-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.roxol-market .roxol-button:hover,
+.roxol-market .roxol-button[aria-pressed="true"] { background: var(--roxol-selected); }
+.roxol-market .roxol-button:disabled { opacity: .65; cursor: default; }
+.roxol-note { color: var(--roxol-muted); margin: 6px 0 0; }
+
+.roxol-sales-preview {
+  position: fixed;
+  inset: auto;
+  width: min(320px, calc(100vw - 16px));
+  margin: 0;
+  padding: 11px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--roxol-sale-line);
+  border-radius: 12px;
+  background: var(--roxol-sale-surface);
+  color: var(--roxol-ink);
+  box-shadow: 0 8px 28px rgb(0 0 0 / .28);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.roxol-sales-preview:not(:popover-open) { display: none; }
+.roxol-sales-preview h3 {
+  margin: 0 0 4px;
+  color: inherit;
+  font-size: 15px;
+  font-weight: 700;
+}
+.roxol-sales-preview .roxol-metrics { color: var(--roxol-muted); }
+.roxol-sales-preview, .roxol-sales-dialog {
+  --roxol-sale-surface: light-dark(#fff, #202126);
+  --roxol-sale-elevated: light-dark(#f2f3f5, #2b2d34);
+  --roxol-sale-line: light-dark(#d5d7dd, #4a4e58);
+  --roxol-sale-up: light-dark(#198142, #58db83);
+  --roxol-sale-down: light-dark(#c13142, #ff707b);
+  --roxol-sale-neutral: light-dark(#777d89, #a4a9b4);
+}
+:is(.roxol-sales-preview, .roxol-sales-dialog) .roxol-button { background: var(--roxol-sale-surface); border-color: var(--roxol-sale-line); }
+:is(.roxol-sales-preview, .roxol-sales-dialog) .roxol-button:is(:hover, [aria-pressed="true"]) { background: var(--roxol-sale-elevated); }
+.roxol-sale-median-summary {
+  margin: 8px 0;
+  padding: 5px 8px;
+  border: 1px solid var(--roxol-sale-line);
+  border-radius: 8px;
+  background: var(--roxol-sale-elevated);
+}
+.roxol-sale-medians {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.roxol-sale-medians caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.roxol-sale-medians :is(th, td) {
+  padding: 3px 0 3px 4px;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+.roxol-sale-medians :is(th, td):first-child {
+  padding-inline-start: 0;
+  text-align: start;
+}
+.roxol-sale-medians thead th,
+.roxol-sale-medians small {
+  color: var(--roxol-muted);
+  font-size: 11px;
+}
+.roxol-sale-medians tbody tr:first-child { border-top: 1px solid var(--roxol-sale-line); }
+.roxol-sale-medians tbody td:nth-child(2) { font-weight: 700; }
+.roxol-sale-medians small { display: block; font-weight: 400; }
+.roxol-sale-count { margin: 6px 0 4px; color: var(--roxol-muted); font-size: 12px; }
+.roxol-sales-preview .roxol-sale-count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+}
+.roxol-sale-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-inline-start: auto;
+  color: var(--roxol-sale-up);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.roxol-sale-share-bar {
+  width: 26px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--roxol-sale-line);
+}
+.roxol-sale-share-bar::before {
+  content: "";
+  display: block;
+  width: var(--roxol-sale-share);
+  height: 100%;
+  background: currentColor;
+}
+.roxol-sale-legend { display: flex; flex-wrap: wrap; gap: 3px 11px; margin: 0 0 7px; font-size: 11px; }
+.roxol-sale-legend > span { display: inline-flex; align-items: center; gap: 4px; color: inherit; }
+.roxol-sale-mark, .roxol-sale-legend span { --roxol-sale-color: var(--roxol-sale-neutral); }
+.roxol-sale-mark[data-direction="up"], .roxol-sale-legend [data-direction="up"] { --roxol-sale-color: var(--roxol-sale-up); }
+.roxol-sale-mark[data-direction="down"], .roxol-sale-legend [data-direction="down"] { --roxol-sale-color: var(--roxol-sale-down); }
+.roxol-sale-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(21px, 1fr));
+  gap: 2px 4px;
+}
+.roxol-sale-mark {
+  display: grid;
+  place-items: center;
+  min-height: 18px;
+  min-width: 0;
+  width: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+}
+.roxol-sale-mark:hover, .roxol-sale-mark[data-active] { background: var(--roxol-sale-elevated); }
+.roxol-sale-mark::before, .roxol-sale-legend span::before {
+  content: "";
+  width: 10px;
+  height: 5px;
+  border-radius: 99px;
+  background: var(--roxol-sale-color);
+}
+.roxol-sale-mark::before {
+  width: calc(100% - 4px);
+  height: 6px;
+}
+.roxol-sale-details {
+  position: fixed;
+  z-index: 2;
+  width: min(270px, calc(100vw - 16px));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 5px 10px;
+  padding: 8px;
+  border: 1px solid var(--roxol-sale-line);
+  border-radius: 8px;
+  background: var(--roxol-sale-surface);
+  box-shadow: 0 4px 18px rgb(0 0 0 / .22);
+  font-size: 12px;
+  pointer-events: none;
+}
+.roxol-sale-details[data-interactive] { pointer-events: auto; }
+.roxol-sale-rap {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  margin: 0;
+}
+.roxol-sale-rap > div { display: flex; justify-content: space-between; gap: 4px; }
+.roxol-sale-rap dt, .roxol-sale-rap dd { margin: 0; }
+.roxol-sale-rap dd { font-weight: 700; font-variant-numeric: tabular-nums; }
+.roxol-preview-footer { margin-top: 8px; }
+
+.roxol-dialog h2 {
+  margin: 0 0 8px;
+  color: var(--roxol-ink);
+  font: 400 22px/1.2 Georgia, serif;
+  overflow-wrap: anywhere;
+}
+
+.roxol-profile {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+  color: inherit;
+  font: inherit;
+}
+.roxol-profile-native { display: contents; }
+div:has(> .roxol-profile-native) { flex-wrap: wrap; }
+.roxol-profile .roxol-profile-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-shift-300, light-dark(rgb(0 0 0 / .08), rgb(255 255 255 / .1)));
+  color: inherit;
+  font: inherit;
+  font-size: .875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+}
+.roxol-profile .roxol-profile-pill:hover { filter: brightness(.88); text-decoration: underline; }
+.roxol-inventory-totals { display: flex; flex-wrap: wrap; gap: 5px 14px; }
+.roxol-player-badges { margin-top: 12px; padding-top: 9px; border-top: 1px solid var(--roxol-line); }
+.roxol-player-badges h3 { margin: 0 0 7px; font: 600 14px/1.4 "Trebuchet MS", sans-serif; }
+.roxol-player-badge-icon { display: block; object-fit: contain; }
+
+.roxol-market.roxol-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(660px, calc(100% - 24px));
+  max-height: 85dvh;
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--roxol-line);
+  border-top: 4px solid var(--roxol-accent);
+  border-radius: 6px;
+  background: var(--roxol-paper);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.roxol-dialog::backdrop { background: rgb(10 16 13 / .55); }
+.roxol-market.roxol-sales-dialog {
+  width: min(850px, calc(100% - 24px));
+  border: 1px solid var(--roxol-sale-line);
+  border-radius: 12px;
+  background: var(--roxol-sale-surface);
+}
+.roxol-sales-dialog .roxol-dialog-header { border-color: var(--roxol-sale-line); }
+.roxol-dialog-header { display: flex; align-items: start; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--roxol-line); }
+.roxol-dialog-header h2 { margin: 0; }
+.roxol-dialog-body { padding: 12px 16px 16px; }
+.roxol-chart { margin: 12px 0; }
+.roxol-chart canvas { display: block; width: 100%; height: auto; }
+.roxol-sales-filters { margin-top: 10px; }
+.roxol-table { width: 100%; border-collapse: collapse; color: var(--roxol-ink); }
+.roxol-table th, .roxol-table td { padding: 6px 5px; border-bottom: 1px solid var(--roxol-line); text-align: start; vertical-align: top; }
+.roxol-table td:last-child, .roxol-table th:last-child { text-align: end; }
+.roxol-table td { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.roxol-table td .roxol-item { max-width: 260px; }
+.roxol-load-more { margin-top: 9px; }
+
+@media (max-width: 480px) {
+  .roxol-dialog .roxol-button { min-height: 34px; }
+  .roxol-dialog-body, .roxol-dialog-header { padding-inline: 10px; }
+  .roxol-dialog .roxol-table { font-size: 12px; }
+}

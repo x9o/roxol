@@ -1,0 +1,107 @@
+:root {
+  color-scheme: light;
+  --paper: #f8f5ed;
+  --ink: #212a25;
+  --muted: #4d5c52;
+  --accent: #17604c;
+  --panel: #edf0e3;
+  --line: #c8cfc2;
+  --control-line: #7d8c80;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #171d19;
+  --ink: #edf2e9;
+  --muted: #bdc9bd;
+  --accent: #a4e0c7;
+  --panel: #202c25;
+  --line: #3e5144;
+  --control-line: #7b9483;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    color-scheme: dark;
+    --paper: #171d19;
+    --ink: #edf2e9;
+    --muted: #bdc9bd;
+    --accent: #a4e0c7;
+    --panel: #202c25;
+    --line: #3e5144;
+    --control-line: #7b9483;
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 14px/1.5 "Trebuchet MS", sans-serif;
+}
+
+main {
+  width: 352px;
+  max-width: 100%;
+  margin-inline: auto;
+  padding: 18px 22px 22px;
+}
+
+.masthead { border-top: 3px solid var(--accent); }
+
+h1 {
+  margin: 10px 0 14px;
+  font: 400 46px/1.1 Georgia, serif;
+  letter-spacing: -.05em;
+}
+
+h2 { margin: 0; font-size: 15px; }
+p { margin: 4px 0 0; }
+
+.trade-panel {
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.trade-panel p { color: var(--muted); overflow-wrap: anywhere; }
+
+#open-trades {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  margin-top: 7px;
+  color: var(--accent);
+  font-weight: bold;
+  text-underline-offset: .2em;
+}
+
+#page-status { margin-top: 8px; color: var(--accent); }
+.preferences { margin-top: 17px; }
+
+.preference-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 7px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+}
+
+select {
+  min-height: 32px;
+  padding: 3px 7px;
+  border: 1px solid var(--control-line);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+#settings-status { margin-top: 7px; color: var(--muted); }

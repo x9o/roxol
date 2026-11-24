@@ -1,0 +1,64 @@
+{
+  "manifest_version": 3,
+  "name": "Roxol",
+  "description": "A local companion for Roblox Trades and limited-item inventories.",
+  "version": "0.2.0",
+  "action": {
+    "default_title": "Roxol",
+    "default_popup": "popup/popup.html"
+  },
+  "options_ui": {
+    "page": "popup/popup.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "background/background.js"
+  },
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://users.roblox.com/*",
+    "https://catalog.roblox.com/*",
+    "https://economy.roblox.com/*",
+    "https://apis.roblox.com/*",
+    "https://inventory.roblox.com/*",
+    "https://trades.roblox.com/*",
+    "https://api.rolimons.com/*",
+    "https://www.rolimons.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.roblox.com/trades*",
+        "https://www.roblox.com/*/trades*"
+      ],
+      "js": ["content/trade_page.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.roblox.com/catalog*",
+        "https://www.roblox.com/*/catalog*",
+        "https://www.roblox.com/bundles/*",
+        "https://www.roblox.com/*/bundles/*",
+        "https://www.roblox.com/users/*/profile*",
+        "https://www.roblox.com/*/users/*/profile*",
+        "https://www.roblox.com/users/*/inventory*",
+        "https://www.roblox.com/*/users/*/inventory*"
+      ],
+      "js": [
+        "shared/market_targets.js",
+        "vendor/nevos/rolimons_item_details.js",
+        "content/market_ui.js",
+        "content/market_pages.js"
+      ],
+      "css": ["content/market.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/rolimons.png", "assets/robux.png", "assets/roliBadges/*.svg"],
+      "matches": ["https://www.roblox.com/*"]
+    }
+  ]
+}
