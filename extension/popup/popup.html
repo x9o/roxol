@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <title>Roxol settings</title>
+    <link rel="icon" href="../assets/roxol-32.png" />
     <link rel="stylesheet" href="popup.css" />
+    <script src="../shared/market_targets.js" defer></script>
     <script src="../shared/trades.js" defer></script>
     <script src="popup.js" defer></script>
   </head>
@@ -33,6 +35,10 @@
             <option value="light">Light</option>
             <option value="dark">Dark</option>
           </select>
+        </div>
+        <div class="preference-row">
+          <label for="overpay">Local overpay benchmarks</label>
+          <input type="checkbox" id="overpay" disabled />
         </div>
         <p id="settings-status" role="status" hidden></p>
       </section>

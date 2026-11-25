@@ -153,7 +153,7 @@
 .roxol-card .roxol-item-value { margin: 0; }
 .roxol-card .roxol-item-value dt { display: inline-flex; align-items: center; font-size: 0; }
 .roxol-card .roxol-item-value .roxol-icon { margin: 0; }
-.roxol-card-host.roxol-card-relative { position: relative; }
+.roxol-card-relative { position: relative; }
 .roxol-market :is(.roxol-button.roxol-history-trigger, .roxol-badge.roxol-icon-badge) {
   display: inline-flex;
   align-items: center;
@@ -171,12 +171,133 @@
   padding: 0;
   font-size: 0;
 }
-.roxol-card-host .roxol-card .roxol-button.roxol-history-trigger {
+.roxol-market.roxol-card-overlay {
   position: absolute;
   z-index: 1;
-  inset-block-start: 6px;
-  inset-inline-end: 6px;
-  box-shadow: 0 1px 3px rgb(0 0 0 / .2);
+  inset: 0;
+  pointer-events: none;
+  font: inherit;
+  color: inherit;
+}
+.roxol-market.roxol-card-overlay.roxol-card-anchored {
+  inset: auto;
+  top: anchor(top);
+  left: anchor(left);
+  width: anchor-size(width);
+  height: anchor-size(height);
+}
+.roxol-card-overlay > .roxol-actions { position: absolute; top: 3px; right: 3px; margin: 0; }
+.roxol-market.roxol-card-overlay :is(.roxol-card-control, .roxol-history-trigger) {
+  pointer-events: auto;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgb(0 0 0 / .25);
+  background: var(--color-surface-100, var(--roxol-paper));
+  color: var(--color-content-emphasis, var(--roxol-ink));
+}
+.roxol-card-overlay .roxol-button.roxol-history-trigger,
+.roxol-card-overlay .roxol-button.roxol-card-control {
+  display: grid;
+  place-content: center;
+  min-height: 23px;
+  min-width: 23px;
+  padding: 2px;
+  border-radius: 6px;
+}
+.roxol-card-overlay .roxol-history-trigger { font-size: 0; gap: 0; }
+.roxol-card-overlay .roxol-card-control { position: absolute; }
+.roxol-market.roxol-card-overlay .roxol-card-demand {
+  top: 3px;
+  left: 3px;
+  background: #e1e3e8;
+  color: #292f3c;
+  border-color: transparent;
+}
+.roxol-card-overlay .roxol-card-demand[data-demand="amazing"] { background: #ffe082; color: #533708; }
+.roxol-card-overlay .roxol-card-demand[data-demand="high"] { background: #e9d5ff; color: #5e2389; }
+.roxol-card-overlay .roxol-card-demand[data-demand="normal"] { background: #c2efd1; color: #185239; }
+.roxol-card-overlay .roxol-card-demand:is([data-demand="low"], [data-demand="terrible"]) { background: #ffd5d1; color: #851d22; }
+.roxol-card-overlay .roxol-card-state { top: 3px; right: 29px; }
+.roxol-card-overlay .roxol-button.roxol-card-copy {
+  bottom: 3px;
+  left: 3px;
+  max-width: calc(100% - 6px);
+  min-height: 17px;
+  padding-inline: 4px;
+  white-space: nowrap;
+  font-size: .65rem;
+  font-variant-numeric: tabular-nums;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.roxol-card-with-limited-badge .roxol-button.roxol-card-copy { bottom: 20px; }
+.roxol-state-warning-icon { clip-path: polygon(50% 0, 100% 95%, 0 95%, 50% 0, 50% 29%, 43% 29%, 43% 59%, 57% 59%, 57% 29%, 50% 29%, 50% 68%, 43% 68%, 43% 82%, 57% 82%, 57% 68%, 50% 68%); }
+.roxol-card-tooltip {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  pointer-events: none;
+  max-width: min(285px, calc(100vw - 12px));
+  padding: 5px 8px;
+  border: 1px solid var(--roxol-line);
+  border-radius: 6px;
+  background: var(--roxol-paper);
+  color: var(--roxol-ink);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.roxol-card-overlay .roxol-sales-preview { pointer-events: auto; }
+.roxol-card .roxol-metrics .roxol-metric dd { font-size: 1em; }
+.roxol-market.roxol-trade-comparison {
+  clear: both;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  inline-size: 100%;
+  margin: 0;
+  padding-block: 12px;
+  color-scheme: light dark;
+  color: inherit;
+  font: inherit;
+}
+.light-theme .roxol-market.roxol-trade-comparison { color-scheme: light; }
+.dark-theme .roxol-market.roxol-trade-comparison { color-scheme: dark; }
+
+.roxol-trade-chip {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 8px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid light-dark(#b9bfca, #5b6473);
+  border-radius: 9px;
+  background: light-dark(#f3f5f8, #262b34);
+  color: light-dark(#343b47, #e2e7ef);
+  font-size: 1rem;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.trade-request-item:has(.roxol-card) { height: auto; }
+.roxol-trade-chip-label { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
+.roxol-trade-chip-label .roxol-icon { width: 1em; height: 1em; margin: 0; }
+.roxol-trade-chip strong { color: inherit; font-weight: 700; }
+.roxol-trade-comparison .roxol-trade-chip[data-direction="up"] {
+  border-color: light-dark(#80b597, #487a63);
+  background: light-dark(#e8f6ed, #1b382c);
+  color: light-dark(#135633, #a9ecc1);
+}
+.roxol-trade-comparison .roxol-trade-chip[data-direction="down"] {
+  border-color: light-dark(#d59a9f, #915760);
+  background: light-dark(#fceef0, #46262c);
+  color: light-dark(#892735, #ffc0ca);
 }
 .roxol-market-symbol {
   display: inline-block;
@@ -550,3 +671,24 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
   .roxol-dialog-body, .roxol-dialog-header { padding-inline: 10px; }
   .roxol-dialog .roxol-table { font-size: 12px; }
 }
+
+.roxol-overpay {
+  border-inline-start: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+  color: inherit;
+  font-family: inherit;
+  margin-block: 0.65rem;
+  padding-inline-start: 0.7rem;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+.roxol-overpay-heading { display: block; margin-block-end: 0.25rem; }
+.roxol-overpay-group { display: grid; gap: 0.12rem; margin-block: 0.4rem; }
+.roxol-overpay p { margin: 0.25rem 0 0; }
+.roxol-overpay-status { font-weight: 600; }
+.roxol-overpay-proofs summary { cursor: pointer; }
+.roxol-overpay-proofs ul { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; padding: 0; list-style: none; }
+.roxol-overpay-proofs .roxol-link { color: inherit; text-decoration: underline; }
+.roxol-overpay :focus-visible { outline-color: currentColor; }
+.roxol-trade-comparison .roxol-overpay { flex: 1 0 100%; margin: 0.25rem 0 0; }

@@ -32,11 +32,13 @@ const RoxolMarketUI = (() => {
   let activeDialog;
   let positionActivePreview;
   let positionActiveSale;
+  let activeCardTooltip;
   let itemPanelCount = 0;
 
   function positionSalesOverlays() {
     positionActivePreview?.();
     positionActiveSale?.();
+    activeCardTooltip?.position();
   }
 
   window.addEventListener("resize", positionSalesOverlays);
@@ -261,6 +263,74 @@ const RoxolMarketUI = (() => {
         { direction: raises ? "up" : "down" });
     }
     return badges;
+  }
+
+  function cardBadge(label, iconName, variant, text = "") {
+    const badge = button(text);
+    badge.classList.add("roxol-card-control", `roxol-card-${variant}`);
+    badge.setAttribute("aria-label", label);
+    if (iconName) badge.prepend(symbol(iconName));
+    const tooltip = element("span", "roxol-card-tooltip", label);
+    tooltip.setAttribute("aria-hidden", "true");
+    tooltip.setAttribute("popover", "manual");
+    badge.append(tooltip);
+    const hide = () => {
+      if (tooltip.matches(":popover-open")) tooltip.hidePopover();
+      if (activeCardTooltip?.hide === hide) activeCardTooltip = null;
+    };
+    function position() {
+      if (!tooltip.matches(":popover-open")) {
+        hide();
+        return;
+      }
+      const rect = badge.getBoundingClientRect();
+      const edge = document.documentElement.clientWidth - tooltip.offsetWidth - 6;
+      tooltip.style.left = `${Math.max(6, Math.min(rect.left, edge))}px`;
+      tooltip.style.top = `${rect.bottom + tooltip.offsetHeight + 10 <= document.documentElement.clientHeight
+        ? rect.bottom + 4 : Math.max(6, rect.top - tooltip.offsetHeight - 4)}px`;
+    }
+    function show() {
+      if (activeCardTooltip?.hide !== hide) activeCardTooltip?.hide();
+      if (!tooltip.matches(":popover-open")) tooltip.showPopover();
+      activeCardTooltip = { hide, position };
+      position();
+    }
+    badge.addEventListener("focus", show);
+    badge.addEventListener("blur", hide);
+    badge.addEventListener("pointerenter", show);
+    badge.addEventListener("pointerleave", () => {
+      if (document.activeElement !== badge) hide();
+    });
+    badge.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") hide();
+    });
+    badge.addEventListener("click", () => {
+      badge.focus();
+      show();
+    });
+    return badge;
+  }
+
+  function cardState(meta) {
+    const trend = meta?.trend ? `Published trend · Rolimon’s: ${meta.trend}` : "";
+    const signal = meta?.signal;
+    const forecast = signal && (signal.direction === "raise" ? "Might raise" : "Might drop");
+    const labels = [
+      meta?.projected ? "Projected · Rolimon’s" : "",
+      forecast ? `${forecast} · Roxol RAP estimate (possible value ${format(signal.target)})` : "",
+      trend,
+    ].filter(Boolean);
+    const iconName = meta?.projected ? "state-warning" : forecast
+      ? (signal.direction === "raise" ? "trend-raising" : "trend-lowering")
+      : "trend-stable";
+    return cardBadge(labels.join("\n") || (meta?.projected === false ? "Not projected" : "State unknown"), iconName, "state");
+  }
+
+  function cardValue({ rolimons, rap }) {
+    if (rolimons?.value != null) return { amount: rolimons.value };
+    const fallback = rolimons?.fallbackValue ?? rolimons?.rap ?? rap ?? null;
+    const label = fallback === (rolimons?.rap ?? rap) ? "RAP" : "fallback";
+    return { amount: fallback, label };
   }
 
   function bestPriceDeals(price, rap, value) {
@@ -586,7 +656,7 @@ const RoxolMarketUI = (() => {
     });
   }
 
-  function itemPanel(item, { card = false, getBestPrice, onRap } = {}) {
+  function itemPanel(item, { card = false, cardOverlay, nativeLabel, getBestPrice, onRap } = {}) {
     const panel = element("div", `roxol-market roxol-item ${card ? "roxol-card" : "roxol-item-detail clearfix item-info-row-container"}`);
     panel.dataset.roxolItem = keyOf(item);
     panel.setAttribute("role", "group");
@@ -602,9 +672,17 @@ const RoxolMarketUI = (() => {
       value.figure.textContent = `${format(meta.fallbackValue)} (${label})`;
       value.row.title = `Rolimon’s ${label} · no assigned value · checked ${new Date(meta.checkedAt).toLocaleString()}`;
     }
+    if (cardOverlay) {
+      value.row.querySelector("dt").lastChild.textContent = "Rolimon’s value";
+      const result = cardValue(item);
+      if (result.label && result.amount != null) {
+        value.figure.textContent = `${format(result.amount)} (${result.label})`;
+        value.row.title = `${meta?.rap != null || meta?.fallbackValue != null ? "Rolimon’s" : "Roblox"} ${result.label} · no assigned value`;
+      }
+    }
 
     const actions = element("div", "roxol-actions");
-    const history = button("Sales history");
+    const history = button(cardOverlay ? "" : "Sales history");
     history.classList.add("roxol-history-trigger");
     history.setAttribute("aria-expanded", "false");
     history.setAttribute("aria-label", "Sales history");
@@ -614,8 +692,10 @@ const RoxolMarketUI = (() => {
     actions.append(history);
     if (card) {
       const metrics = element("dl", "roxol-metrics roxol-item-value");
+      if (nativeLabel) metrics.append(metric(nativeLabel, "robux", item.rap).row);
       metrics.append(value.row);
-      panel.append(metrics, actions);
+      panel.append(metrics);
+      (cardOverlay || panel).append(actions);
     } else {
       const label = element("div", "font-header-1 text-subheader text-label row-label", "Value");
       const content = element("div", "row-content roxol-value-content");
@@ -640,7 +720,7 @@ const RoxolMarketUI = (() => {
     preview.append(element("h3", "", "Recent sales"), previewMetrics);
     if (card) preview.append(itemBadges(meta));
     preview.append(previewBody, footer);
-    panel.append(preview);
+    (cardOverlay || panel).append(preview);
     if (card) {
       panel.addEventListener("click", (event) => {
         if (event.target.closest("button, a")) event.stopPropagation();
@@ -669,7 +749,7 @@ const RoxolMarketUI = (() => {
     }
 
     if (item.rap != null) updateRap(item.rap, item.checkedAt, item.rapSource);
-    else if (item.limited) void getResale();
+    else if (item.limited && !cardOverlay) void getResale();
 
     let pendingSales;
     function getSales() {
@@ -713,6 +793,84 @@ const RoxolMarketUI = (() => {
     return panel;
   }
 
+  const cardPriceSelector = ".item-card-price, [data-testid='item-price'], .item-price, .item-value";
+  const thumbnailSelector = ".item-card-thumb-container, .trade-request-item-thumbnail, .item-thumbnail, .thumbnail-2d-container, thumbnail-2d";
+  // Vaulted until the copy ID control can reliably copy the correct ID.
+  const showCardCopyId = false;
+
+  function mountCard(card, item, { nativeLabel = "Roblox RAP", priceIsRap = false } = {}) {
+    const image = card.querySelector("img");
+    const thumbnail = card.querySelector(thumbnailSelector) || (image?.parentElement !== card ? image?.parentElement : null);
+    if (!thumbnail) return null;
+    const price = card.querySelector(cardPriceSelector);
+    const priceText = price?.textContent;
+    const name = card.querySelector(".item-card-name, .item-name, [data-testid='item-name']");
+    const nativePrice = price && (priceIsRap ? /^\s*\d+(?:[,.'’\s]\d{3})*\s*$/.test(priceText)
+      : /\d|^\s*free\s*$/i.test(priceText));
+    const overlay = element("div", "roxol-market roxol-card-overlay");
+    const demand = item.rolimons?.demand || "Unknown";
+    const demandBadge = cardBadge(`Demand: ${demand}`, "demand", "demand");
+    demandBadge.dataset.demand = demand.toLowerCase();
+    overlay.append(demandBadge, cardState(item.rolimons));
+    if (showCardCopyId && item.copyId) {
+      const label = item.serial ? `#${item.serial}` : /^\d+$/.test(item.copyId) ? `ID ${item.copyId}` : "Copy ID";
+      overlay.append(cardBadge(`${item.serial ? `Serial #${item.serial}\n` : ""}Copy ID: ${item.copyId}`, null, "copy", label));
+    }
+    const panel = itemPanel(item, { card: true, cardOverlay: overlay, nativeLabel: nativePrice ? null : nativeLabel });
+    const anchor = price || name;
+    if (anchor && !thumbnail.contains(anchor)) anchor.after(panel);
+    else card.append(panel);
+    // Roblox uses clickable tiles in the picker and sometimes wraps the thumbnail in a link.
+    overlay.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (event.target.closest("button")) event.preventDefault();
+    });
+    overlay.addEventListener("pointerdown", (event) => event.stopPropagation());
+    overlay.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+    });
+    const link = thumbnail.closest("a[href]");
+    const anchored = link && CSS.supports("top", "anchor(top)");
+    const oldAnchor = thumbnail.style.getPropertyValue("anchor-name");
+    if (anchored) {
+      const anchorName = `--roxol-thumbnail-${itemPanelCount}`;
+      thumbnail.style.setProperty("anchor-name", anchorName);
+      overlay.style.setProperty("position-anchor", anchorName);
+      overlay.classList.add("roxol-card-anchored");
+      link.after(overlay);
+    } else {
+      if (getComputedStyle(thumbnail).position === "static") thumbnail.classList.add("roxol-card-relative");
+      thumbnail.append(overlay);
+    }
+    if (showCardCopyId && thumbnail.querySelector(".limited-icon-container, .icon-label-limited, .icon-label-limited-unique")) {
+      overlay.classList.add("roxol-card-with-limited-badge");
+    }
+    const oldLabel = price?.getAttribute("aria-label");
+    const oldRole = price?.getAttribute("role");
+    if (nativePrice) {
+      if (!oldRole && !price.matches("a, button")) price.setAttribute("role", "group");
+      const label = priceIsRap ? nativeLabel : "Roblox asking price";
+      const units = /\d/.test(priceText) ? " Robux" : "";
+      price.setAttribute("aria-label", `${label}: ${priceText.trim()}${units}`);
+    }
+    return {
+      valid: () => panel.isConnected && card.contains(panel) && thumbnail.isConnected &&
+        (anchored ? overlay.previousElementSibling === link : overlay.parentElement === thumbnail) &&
+        card.querySelector(cardPriceSelector) === price && price?.textContent === priceText,
+      remove() {
+        overlay.remove();
+        panel.remove();
+        thumbnail.classList.remove("roxol-card-relative");
+        if (anchored) thumbnail.style.setProperty("anchor-name", oldAnchor);
+        if (nativePrice) {
+          if (oldLabel == null) price.removeAttribute("aria-label");
+          else price.setAttribute("aria-label", oldLabel);
+          if (!oldRole) price.removeAttribute("role");
+        }
+      },
+    };
+  }
+
   function inventoryView(model, loadPage, badges) {
     const body = showDialog("Collectible inventory");
     const totals = element("div", "roxol-inventory-totals");
@@ -752,5 +910,5 @@ const RoxolMarketUI = (() => {
     return paint;
   }
 
-  return { element, link, titleLink, button, icon, metric, format, request, rolimonsItemUrl, itemPanel, bestPriceDeals, inventoryView, showPlayerBadges, closeDialog };
+  return { element, link, titleLink, button, icon, metric, format, request, rolimonsItemUrl, itemPanel, mountCard, cardValue, cardPriceSelector, bestPriceDeals, inventoryView, showPlayerBadges, closeDialog };
 })();

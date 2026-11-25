@@ -4,7 +4,6 @@
   const cardSelector = ".item-card-container, .catalog-item-container, [data-testid='item-card'], .item-card";
   const detailSelector = "#item-details, #item-container, #item-details-container, .item-details, .item-details-section, [data-testid='item-details']";
   const detailTitleSelector = ".item-details-name-row h1, .item-name-container h1";
-  const cardPriceSelector = ".item-card-price, [data-testid='item-price'], .item-price";
   const detailPriceSelector = ".text-robux-lg, .text-robux, [data-testid='item-price'], [data-testid='best-price'], [data-testid='best-price-amount']";
   const priceRowSelector = ".item-info-row-container, [data-testid='best-price-row'], tr";
   const profileSelector = "#profile-header-container, .profile-header-container, #profile-header, .profile-header, [data-testid='profile-header']";
@@ -36,25 +35,20 @@
   function cardItem(card) {
     const anchor = nativeItemAnchor(card);
     if (anchor) return itemTarget(anchor);
-    const { bundleId, assetId, itemId, itemType } = card.dataset;
-    if (bundleId) return RoxolTargets.targetOf("bundle", bundleId);
-    if (assetId) return RoxolTargets.targetOf("asset", assetId);
-    return RoxolTargets.targetOf(String(itemType).toLowerCase(), itemId);
+    return RoxolTargets.cardTarget(card);
   }
 
   function discardCard(card, state) {
     visibleCards.unobserve(card);
     pendingCards.delete(state);
-    card.classList.remove("roxol-card-host", "roxol-card-relative");
-    state.panel?.remove();
-    panels.delete(state.panel);
+    state.widget?.remove();
     cardStates.delete(card);
   }
 
   function resetPage() {
     ui.closeDialog();
     visibleCards.disconnect();
-    for (const card of cardStates.keys()) card.classList.remove("roxol-card-host", "roxol-card-relative");
+    for (const state of cardStates.values()) state.widget?.remove();
     cardStates.clear();
     pendingCards.clear();
     for (const panel of panels) panel.remove();
@@ -77,22 +71,14 @@
     }
   }, { rootMargin: "160px" });
 
-  function placeCardPanel(card, panel) {
-    const outerLink = card.closest("a[href]");
-    const price = card.querySelector(cardPriceSelector);
-    const priceLink = price?.closest("a[href]");
-    const anchor = outerLink || priceLink || price || nativeItemAnchor(card);
-    const thumbnail = card.querySelector(".item-card-thumb-container, .thumbnail-2d-container, img:not(.roxol-market img)");
-    if (!outerLink && thumbnail) {
-      if (!card.classList.contains("roxol-card-host") && getComputedStyle(card).position === "static") {
-        card.classList.add("roxol-card-relative");
-      }
-      card.classList.add("roxol-card-host");
-    } else {
-      card.classList.remove("roxol-card-host", "roxol-card-relative");
-    }
-    if (anchor && panel.previousElementSibling !== anchor) anchor.after(panel);
-    if (!anchor && panel.parentElement !== card) card.append(panel);
+  function mountCard(state) {
+    const { card, item, data } = state;
+    if (!data?.limited && !card.querySelector(limitedSelector)) return;
+    const copy = RoxolTargets.cardCopy(card);
+    const { instanceId, userAssetId, serial } = copy;
+    state.copy = JSON.stringify(copy);
+    state.widget = ui.mountCard(card, { ...item, ...data, limited: true, copyId: instanceId || userAssetId, serial },
+      { priceIsRap: currentPage.page !== "catalog" });
   }
 
   async function loadVisibleCards() {
@@ -105,28 +91,23 @@
     const details = await ui.request("items", { items: group.map((state) => state.item) });
     for (const state of group) {
       const { card, item, key } = state;
-      if (cardStates.get(card) !== state || state.panel?.isConnected || !card.isConnected || pathname !== location.pathname) continue;
+      if (cardStates.get(card) !== state || !card.isConnected || pathname !== location.pathname) continue;
       const liveItem = cardItem(card);
       if (!liveItem || keyOf(liveItem) !== key) continue;
-      const data = details?.[key];
-      const limited = data?.limited || !!card.querySelector(limitedSelector);
-      if (!limited) continue;
-      state.panel = ui.itemPanel({ ...item, ...data, limited }, { card: true });
-      placeCardPanel(card, state.panel);
-      panels.add(state.panel);
+      state.data = details?.[key] ?? null;
+      mountCard(state);
     }
   }
 
   function scanCards() {
     for (const [card, state] of cardStates) {
       const item = card.isConnected && cardItem(card);
-      if (!item || keyOf(item) !== state.key || (state.panel && !state.panel.isConnected)) {
+      if (!item || keyOf(item) !== state.key) {
         discardCard(card, state);
-      } else if (state.panel) {
-        placeCardPanel(card, state.panel);
-      } else if (!state.hadLimitedBadge && card.querySelector(limitedSelector)) {
-        state.hadLimitedBadge = true;
-        enqueueCard(state);
+      } else if (state.data !== undefined &&
+          (!state.widget?.valid() || state.copy !== JSON.stringify(RoxolTargets.cardCopy(card)))) {
+        state.widget?.remove();
+        mountCard(state);
       }
     }
 
@@ -137,7 +118,7 @@
       if (candidate !== card || cardStates.has(card)) continue;
       const item = cardItem(card);
       if (!item) continue;
-      cardStates.set(card, { card, item, key: keyOf(item), hadLimitedBadge: !!card.querySelector(limitedSelector) });
+      cardStates.set(card, { card, item, key: keyOf(item) });
       visibleCards.observe(card);
     }
   }
@@ -267,6 +248,17 @@
     mountBestPriceDeals(page, detail);
     const valueAnchor = page.deals?.previousElementSibling === anchor ? page.deals : anchor;
     if (page.panel.previousElementSibling !== valueAnchor) valueAnchor.after(page.panel);
+    if (!page.overpayRequest && page.detailData.limited) {
+      page.overpayRequest = RoxolOverpay.request({ kind: page.kind, id: page.id }).then((data) => {
+        if (currentPage !== page || pathname !== location.pathname) return;
+        page.overpayPanel = RoxolOverpay.render(data);
+        if (page.overpayPanel) panels.add(page.overpayPanel);
+        mountDetail(page);
+      });
+    }
+    if (page.overpayPanel && page.overpayPanel.previousElementSibling !== page.panel) {
+      page.panel.after(page.overpayPanel);
+    }
     mountTitleLink(page, title, "View item on Rolimon’s", ui.rolimonsItemUrl(page));
   }
 
@@ -441,6 +433,8 @@
     if (changes.some(({ target }) => !(target.nodeType === Node.TEXT_NODE ? target.parentElement : target)?.closest(".roxol-market"))) {
       scheduleScan();
     }
-  }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["href"] });
+  }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true,
+    attributeFilter: ["href", "data-collectibleiteminstanceid", "data-collectible-item-instance-id",
+      "data-user-asset-id", "data-userassetid", "user-asset-id", "data-serial-number", "data-serialnumber"] });
   scan();
 })();

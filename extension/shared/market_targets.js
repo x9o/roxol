@@ -24,6 +24,7 @@ const RoxolTargets = (() => {
     if (item) return { page: "detail", ...targetOf(item[1] === "bundles" ? "bundle" : "asset", item[2]) };
     const user = /^\/users\/([1-9]\d{0,19})\/(profile|inventory)\/?$/.exec(path);
     if (user) return { page: user[2], id: user[1] };
+    if (/^\/(?:trades(?:\/|$)|users\/[1-9]\d{0,19}\/trade\/?$)/i.test(path)) return { page: "trades" };
     return /^\/catalog\/?$/.test(path) ? { page: "catalog" } : null;
   }
 
@@ -43,5 +44,32 @@ const RoxolTargets = (() => {
     return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
   }
 
-  return { idOf, targetOf, routeOf, keyOf, robloxItemUrl, rolimonsSalesUrl, amount };
+  function copyIdOf(value) {
+    return idOf(value) || (typeof value === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value)
+      ? value.toLowerCase() : null);
+  }
+
+  function cardTarget(card) {
+    const { bundleId, assetId, itemId, itemType } = card.dataset;
+    if (bundleId) return targetOf("bundle", bundleId);
+    if (assetId) return targetOf("asset", assetId);
+    return targetOf(String(itemType).toLowerCase(), itemId);
+  }
+
+  function cardCopy(card) {
+    const read = (names) => {
+      for (const name of names) {
+        const node = card.hasAttribute(name) ? card : card.querySelector(`[${name}]`);
+        if (node) return node.getAttribute(name);
+      }
+      return null;
+    };
+    return {
+      instanceId: copyIdOf(read(["data-collectibleiteminstanceid", "data-collectible-item-instance-id"])),
+      userAssetId: idOf(read(["data-user-asset-id", "data-userassetid", "user-asset-id"])),
+      serial: idOf(read(["data-serial-number", "data-serialnumber"])),
+    };
+  }
+
+  return { idOf, targetOf, routeOf, keyOf, robloxItemUrl, rolimonsSalesUrl, amount, copyIdOf, cardCopy, cardTarget };
 })();

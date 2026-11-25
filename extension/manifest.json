@@ -3,8 +3,20 @@
   "name": "Roxol",
   "description": "A local companion for Roblox Trades and limited-item inventories.",
   "version": "0.2.0",
+  "icons": {
+    "16": "assets/roxol-16.png",
+    "32": "assets/roxol-32.png",
+    "48": "assets/roxol-48.png",
+    "128": "assets/roxol-128.png"
+  },
   "action": {
     "default_title": "Roxol",
+    "default_icon": {
+      "16": "assets/roxol-16.png",
+      "32": "assets/roxol-32.png",
+      "48": "assets/roxol-48.png",
+      "128": "assets/roxol-128.png"
+    },
     "default_popup": "popup/popup.html"
   },
   "options_ui": {
@@ -15,6 +27,7 @@
     "service_worker": "background/background.js"
   },
   "permissions": ["storage"],
+  "optional_host_permissions": ["http://127.0.0.1/*"],
   "host_permissions": [
     "https://users.roblox.com/*",
     "https://catalog.roblox.com/*",
@@ -29,9 +42,30 @@
     {
       "matches": [
         "https://www.roblox.com/trades*",
-        "https://www.roblox.com/*/trades*"
+        "https://www.roblox.com/*/trades*",
+        "https://www.roblox.com/users/*/trade*",
+        "https://www.roblox.com/*/users/*/trade*"
       ],
-      "js": ["content/trade_page.js"],
+      "js": ["shared/market_targets.js", "shared/trades.js", "content/trade_bridge.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.roblox.com/trades*",
+        "https://www.roblox.com/*/trades*",
+        "https://www.roblox.com/users/*/trade*",
+        "https://www.roblox.com/*/users/*/trade*"
+      ],
+      "js": [
+        "shared/market_targets.js",
+        "shared/trades.js",
+        "vendor/nevos/rolimons_item_details.js",
+        "content/market_ui.js",
+        "content/overpay_ui.js",
+        "content/trade_page.js"
+      ],
+      "css": ["content/market.css"],
       "run_at": "document_idle"
     },
     {
@@ -49,6 +83,7 @@
         "shared/market_targets.js",
         "vendor/nevos/rolimons_item_details.js",
         "content/market_ui.js",
+        "content/overpay_ui.js",
         "content/market_pages.js"
       ],
       "css": ["content/market.css"],
