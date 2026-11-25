@@ -200,7 +200,7 @@
       const net = next.offers[side].net;
       // Native detail rows show post-tax Robux. Use the API gross on the give side.
       const robux = side === 0 ? gross : net ?? (gross == null ? null : Math.round(gross * 0.7));
-      return { ...items, robux, itemOnly: gross === 0 && (net === undefined || net === 0) };
+      return { ...items, robux };
     });
   }
 
@@ -208,7 +208,6 @@
     if (offers.length !== 2) return null;
     return offers.map(({ cards, gross, hasInput, net }, side) => ({
       cards, prices: cards,
-    itemOnly: hasInput ? gross === 0 : net === undefined || net === 0,
       robux: side === 1
         ? (hasInput ? (gross == null ? null : Math.round(gross * 0.7)) : net === undefined ? 0 : net)
         : (hasInput ? gross : net === undefined || net === 0 ? 0 : null),
@@ -291,31 +290,11 @@
       comparison.prepend(...totals.map((row) => comparisonChip(...row)));
       comparison.dataset.totals = signature;
     }
-    mountOverpay(comparison, offers);
     if (next.isForm) {
       if (comparison.previousElementSibling !== first.offer) first.offer.after(comparison);
     } else if (second.offer.firstElementChild !== comparison) {
       second.offer.prepend(comparison);
     }
-  }
-
-  function mountOverpay(panel, offers) {
-    if (panel.dataset.overpayRequested) return;
-    if (!offers.every(({ itemOnly, prices }) => itemOnly && prices.length && prices.every(({ target }) => target))) return;
-    const [give, receive] = offers;
-    const swap = give.prices.length === 1 && receive.prices.length === 1;
-    const side = receive.prices.length === 1 ? 1 : give.prices.length === 1 ? 0 : -1;
-    if (side < 0) return;
-    const item = offers[side].prices[0].target;
-    if (offers[1 - side].prices.some(({ target }) => keyOf(item) === keyOf(target))) return;
-    const shape = swap ? "swap" : "one-for-many";
-    const perspective = swap ? "Swap · item received" : side === 1 ? "Upgrade" : "Downgrade";
-    panel.dataset.overpayRequested = "true";
-    void RoxolOverpay.request(item).then((data) => {
-      if (comparison !== panel || !panel.isConnected) return;
-      const benchmark = RoxolOverpay.render(data, { shape, perspective });
-      if (benchmark) panel.append(benchmark);
-    });
   }
 
   function renderCards(items) {

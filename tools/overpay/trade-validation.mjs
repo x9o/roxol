@@ -1,18 +1,11 @@
 import { validBasket } from "./stats.mjs";
+import overpay from "../../extension/shared/item-overpay.js";
+
+export const { assetCopies } = overpay;
 
 const day = 86_400_000;
 const minute = 60_000;
 const maxObservationLag = 2 * day;
-const idPattern = /^[1-9]\d{0,19}$/;
-
-export function assetCopies(items) {
-  if (!Array.isArray(items) || !items.length || items.some(({ assetId, quantity }) =>
-    !idPattern.test(assetId ?? "") || !Number.isInteger(quantity) || quantity < 1 || quantity > 4)) return null;
-  const copies = items.flatMap((item) => item.quantity === 1 ? [item] :
-    Array.from({ length: item.quantity }, () => ({ assetId: item.assetId })));
-  return copies.length <= 4 ? copies : null;
-}
-
 function fingerprint(sides) {
   return sides.map((side) => side.map(({ assetId }) => assetId).sort().join(",")).sort().join("|");
 }

@@ -258,13 +258,10 @@
     mountBestPriceDeals(page, detail);
     const valueAnchor = page.deals?.previousElementSibling === anchor ? page.deals : anchor;
     if (page.panel.previousElementSibling !== valueAnchor) valueAnchor.after(page.panel);
-    if (!page.overpayRequest && page.detailData.limited) {
-      page.overpayRequest = RoxolOverpay.request({ kind: page.kind, id: page.id }).then((data) => {
-        if (currentPage !== page || pathname !== location.pathname) return;
-        page.overpayPanel = RoxolOverpay.render(data);
-        if (page.overpayPanel) panels.add(page.overpayPanel);
-        mountDetail(page);
-      });
+    if (!page.overpayPanel && page.kind === "asset" &&
+        (page.detailData.limited || detail?.querySelector(limitedSelector))) {
+      page.overpayPanel = RoxolOverpay.mount(page.id);
+      panels.add(page.overpayPanel);
     }
     if (page.overpayPanel && page.overpayPanel.previousElementSibling !== page.panel) {
       page.panel.after(page.overpayPanel);

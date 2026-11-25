@@ -1,3 +1,7 @@
+import overpay from "../../extension/shared/item-overpay.js";
+
+export const { percentile } = overpay;
+
 const day = 86400000;
 
 function canonicalBasket(basket) {
@@ -57,12 +61,6 @@ export function deduplicate(trades) {
     if ((trade.date.includes("T") && !group.trade.date.includes("T")) || (!group.trade.tradeId && trade.tradeId)) group.trade = trade;
   }
   return [...groups].map(({ trade, links, conflict }) => ({ ...trade, links: [...links], conflict }));
-}
-
-export function percentile(sorted, fraction) {
-  const index = (sorted.length - 1) * fraction;
-  const lower = Math.floor(index);
-  return sorted[lower] + (sorted[Math.ceil(index)] - sorted[lower]) * (index - lower);
 }
 
 export function aggregate(samples, now = Date.now(), minimum = 10) {

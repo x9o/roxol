@@ -729,22 +729,59 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
 }
 
 .roxol-overpay {
-  border-inline-start: 2px solid color-mix(in srgb, currentColor 35%, transparent);
-  color: inherit;
-  font-family: inherit;
-  margin-block: 0.65rem;
-  padding-inline-start: 0.7rem;
+  background: var(--roxol-paper);
+  border: 1px solid var(--roxol-line);
+  border-block-start: 2px solid var(--roxol-accent);
+  border-radius: 6px;
+  margin-block: 8px;
+  padding: 12px;
   max-inline-size: 100%;
   min-inline-size: 0;
-  font-size: 0.8125rem;
   overflow-wrap: anywhere;
 }
-.roxol-overpay-heading { display: block; margin-block-end: 0.25rem; }
-.roxol-overpay-group { display: grid; gap: 0.12rem; margin-block: 0.4rem; }
-.roxol-overpay p { margin: 0.25rem 0 0; }
-.roxol-overpay-status { font-weight: 600; }
-.roxol-overpay-proofs summary { cursor: pointer; }
-.roxol-overpay-proofs ul { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; padding: 0; list-style: none; }
-.roxol-overpay-proofs .roxol-link { color: inherit; text-decoration: underline; }
-.roxol-overpay :focus-visible { outline-color: currentColor; }
-.roxol-trade-comparison .roxol-overpay { flex: 1 0 100%; margin: 0.25rem 0 0; }
+
+.roxol-overpay-header, .roxol-overpay-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.roxol-overpay-header { justify-content: space-between; }
+.roxol-overpay-header .roxol-link { color: var(--roxol-accent); }
+.roxol-overpay-heading { margin: 0; color: inherit; font: 700 1.16em/1.2 Georgia, serif; }
+.roxol-overpay-filter { margin-block: 10px; }
+
+.roxol-overpay-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 12px;
+  margin: 0;
+  padding-block: 8px;
+  border-block: 1px solid var(--roxol-line);
+}
+
+.roxol-overpay-stats dt, .roxol-overpay-caption, .roxol-overpay-note {
+  color: var(--roxol-muted);
+  font-size: .86em;
+  font-weight: 400;
+}
+
+.roxol-overpay-stats dd { margin: 0; font-weight: 700; }
+.roxol-overpay-figure, .roxol-overpay-stats dd { font-variant-numeric: tabular-nums; }
+.roxol-overpay-note { margin: 7px 0 0; }
+.roxol-overpay-list-heading { margin: 9px 0 1px; color: inherit; font: inherit; font-weight: 700; }
+.roxol-overpay-trades, .roxol-overpay-basket { list-style: none; margin: 0; padding: 0; }
+.roxol-overpay-basket li { display: inline; }
+.roxol-overpay-basket li + li::before { content: " · "; }
+
+.roxol-overpay-trade {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding-block: 5px;
+  border-block-end: 1px solid var(--roxol-line);
+}
+
+.roxol-overpay-trade-values { display: grid; align-content: center; text-align: end; font-weight: 700; }
+.roxol-overpay-trade-values > :last-child { font-size: .86em; }

@@ -76,6 +76,8 @@ All groups were thin. Fixture tests checked the numeric distributions, missing a
 
 ## Discord proof collector
 
+The collector is a research tool for the completed-trade audit. The extension's Overpay section uses live RoUtility trade history and Rolimon's historical valuations.
+
 Use Node.js 22 or later and Microsoft Edge on Windows. Run these commands from the repository root.
 
 ```powershell
@@ -91,3 +93,30 @@ Backfill starts at the oldest saved post and reads up to 200 older posts. You ca
 If paging or an attachment download fails, rerun the same command. The saved post list updates only after the whole batch is ready, and posts are keyed by Discord message ID. A successful backfill moves the oldest saved post, so another successful invocation collects an earlier batch.
 
 The dedicated Edge profile and collected evidence are stored under `%LOCALAPPDATA%\Roxol\overpay` by default. Set `ROXOL_OVERPAY_DIR` to use another local directory.
+
+### Review completed proofs
+
+Run `node tools/overpay/analyze.mjs` to produce `pilot.json`. Add `--ocr` if Tesseract is on PATH and you want OCR text alongside unreviewed attachments. Inspect the saved images for completed status, both item baskets, Robux amounts, the trade date, and any visible copy or trade IDs. Add verified entries to `reviews.json` and rerun the analyzer to incorporate them into the report.
+
+A review maps a Discord message ID to the screenshot findings. Use the attachment hash listed in `pilot.json`. Item IDs are strings, and each side uses `asset` or `bundle`, an ID, and a quantity. Add `copyId` and `tradeId` when visible. Side order is zero-based for `targetSide` and consistent across the other fields. Use an ISO timestamp with an offset when known. For date-only records, `offsetMinutes` is the offset from UTC if the evidence establishes it. A review example with placeholders:
+
+```json
+{
+  "1450000000000000000": {
+    "evidenceSha256": "<attachment hash from pilot.json>",
+    "completed": true,
+    "staffReview": "unknown",
+    "date": "2026-11-15",
+    "participants": ["Sender", "Receiver"],
+    "baskets": [
+      [{ "kind": "asset", "id": "19027209", "quantity": 1 }],
+      [{ "kind": "asset", "id": "20980138", "quantity": 1 }]
+    ],
+    "robux": [0, 0],
+    "targetSide": 0,
+    "roPost": { "result": "<match, discrepancy, or unavailable>", "reference": "<RoPost lookup or result link>" }
+  }
+}
+```
+
+If a post contains multiple completed trades, use an array of review entries for that message ID and give each entry its matching attachment hash. Use `robuxBasis` to record whether the screenshot shows an offered amount or an amount after the fee. Use `serial` for a visible serial number and `copyId` for an actual copy ID.

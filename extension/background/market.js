@@ -6,12 +6,15 @@
   const itemFeedCache = new Map();
   const salesCache = new Map();
   const tradeHistoryCache = new Map();
+  const tradeProfileCache = new Map();
+  const overpayCache = new Map();
   const listingCache = new Map();
   const playerCache = new Map();
   const catalogUrl = "https://catalog.roblox.com/v1/catalog/items/details";
   const uuidPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
   const itemTTL = 5 * 60_000;
   const failureTTL = 20_000;
+  const tradePageSize = 20;
 
   // Share public metadata across tabs and cap simultaneous requests.
   const requests = [];
@@ -35,11 +38,13 @@
         resolve,
         reject,
         task: async () => {
+          const timeout = AbortSignal.timeout(8000);
+          const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
           const response = await fetch(url, {
             credentials: "omit",
             redirect: "error",
             ...init,
-            signal: AbortSignal.timeout(8000),
+            signal,
           });
           const data = response.ok ? await response[format]() : null;
           return { status: response.status, data, csrf: response.headers.get("x-csrf-token") };
@@ -257,10 +262,11 @@
   }
 
   async function fetchTradeHistory(assetId, page) {
-    const url = `https://routility.io/web/item-trades/${assetId}?kind=trade&range=all&limit=20&page=${page}`;
+    const url = `https://routility.io/web/item-trades/${assetId}?kind=trade&range=all&limit=${tradePageSize}&page=${page}`;
     const { data } = await request(url);
+    const pages = data?.total === 0 && data?.pages === 0 ? 1 : data?.pages;
     if (!Array.isArray(data?.trades) || amount(data.total) == null ||
-        !amount(data.page) || !amount(data.pages) || data.page > data.pages) {
+        !amount(data.page) || !amount(pages) || data.page > pages) {
       return { status: "unavailable" };
     }
 
@@ -280,7 +286,7 @@
       });
     }
     return {
-      status: "ok", page: data.page, pages: data.pages, total: data.total,
+      status: "ok", page: data.page, pages, total: data.total,
       checkedAt: new Date().toISOString(), trades: [...trades.values()],
     };
   }
@@ -289,6 +295,31 @@
     const key = `${assetId}:${page}`;
     return cached(tradeHistoryCache, key) || remember(tradeHistoryCache, key,
       fetchTradeHistory(assetId, page), 60, 2 * 60_000);
+  }
+
+  function readTradeProfile(assetId, signal) {
+    const source = `https://www.rolimons.com/item/${assetId}`;
+    return cached(tradeProfileCache, assetId) || remember(tradeProfileCache, assetId,
+      request(source, { signal }, "text")
+        .then(({ data }) => data && RoxolTradeValuations.parseItemProfile(data, assetId, source, Date.now()))
+        .catch(() => null), 240, itemTTL);
+  }
+
+  async function fetchOverpay(assetId) {
+    const history = await readTradeHistory(assetId, 1);
+    if (history.status !== "ok") return { status: "unavailable" };
+    const now = Date.now();
+    const trades = history.trades.slice(0, tradePageSize).filter((trade) => {
+      const sides = [trade.sideA, trade.sideB];
+      const { valid, through } = RoxolTradeValuations.observationWindow(trade);
+      return valid && through <= now && RoxolItemOverpay.isolatedSide(sides, assetId) >= 0 &&
+        !RoxolItemOverpay.unusualComposition(sides);
+    });
+    const ids = [...new Set(trades.flatMap((trade) => [...trade.sideA, ...trade.sideB].map(({ assetId }) => assetId)))];
+    const signal = AbortSignal.timeout(15_000);
+    const profiles = new Map(await Promise.all(ids.map(async (id) => [id, await readTradeProfile(id, signal)])));
+    const valued = RoxolTradeValuations.resolveTrades(trades, profiles);
+    return { status: "ok", groups: RoxolItemOverpay.itemPreview(valued, assetId, now) };
   }
 
   async function eligibility(id) {
@@ -330,6 +361,13 @@
       if (route.page !== "detail" || route.kind !== "asset" || message.assetId !== route.id ||
           !amount(message.page)) return { status: "unavailable" };
       return readTradeHistory(route.id, message.page);
+    },
+    "roxol:market-overpay"(message, route) {
+      if (route.page !== "detail" || route.kind !== "asset" || message.assetId !== route.id) {
+        return { status: "unavailable" };
+      }
+      return cached(overpayCache, route.id) || remember(overpayCache, route.id,
+        fetchOverpay(route.id).catch(() => ({ status: "unavailable" })), 60, 2 * 60_000);
     },
     "roxol:market-best-listing"(message) {
       const item = targetOf(message.item?.kind, message.item?.id);

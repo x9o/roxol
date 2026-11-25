@@ -1,6 +1,4 @@
 const themePicker = document.querySelector("#theme");
-const overpayPicker = document.querySelector("#overpay");
-const overpayPermission = { origins: ["http://127.0.0.1/*"] };
 const settingsStatus = document.querySelector("#settings-status");
 const themeKey = "appearance";
 const themes = new Set(["system", "light", "dark"]);
@@ -80,24 +78,3 @@ void loadTheme();
 void showAccount();
 // Most tabs do not have a Roxol content script.
 void showTradeTabStatus().catch(() => {});
-
-async function loadOverpayPreference() {
-  const { overpayEnabled } = await chrome.storage.local.get("overpayEnabled");
-  overpayPicker.checked = Boolean(overpayEnabled && await chrome.permissions.contains(overpayPermission));
-  overpayPicker.disabled = false;
-}
-
-overpayPicker.addEventListener("change", async () => {
-  const enabled = overpayPicker.checked;
-  overpayPicker.disabled = true;
-  try {
-    const allowed = !enabled || await chrome.permissions.request(overpayPermission);
-    await chrome.storage.local.set({ overpayEnabled: enabled && allowed });
-    showSettingsError(allowed ? "" : "Local benchmarks need permission to connect to the benchmark service.");
-  } catch {
-    showSettingsError("Roxol couldn't save your overpay preference.");
-  } finally {
-    await loadOverpayPreference().catch(() => showSettingsError("Roxol couldn't load your overpay preference."));
-  }
-});
-void loadOverpayPreference().catch(() => showSettingsError("Roxol couldn't load your overpay preference."));

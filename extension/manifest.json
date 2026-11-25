@@ -27,7 +27,6 @@
     "service_worker": "background/background.js"
   },
   "permissions": ["storage"],
-  "optional_host_permissions": ["http://127.0.0.1/*"],
   "host_permissions": [
     "https://users.roblox.com/*",
     "https://catalog.roblox.com/*",
@@ -63,7 +62,6 @@
         "shared/trades.js",
         "vendor/nevos/rolimons_item_details.js",
         "content/market_ui.js",
-        "content/overpay_ui.js",
         "content/trade_page.js"
       ],
       "css": ["content/market.css"],

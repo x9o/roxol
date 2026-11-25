@@ -8,7 +8,7 @@ Roxol is a Chrome and Edge extension for Roblox limited items and trading. It us
 - **Sales history** with an interactive preview and a full viewer. See tracked sale dates, estimated prices, RAP before and after each sale, how often sales exceeded pre-sale RAP, and how the median prices for the last 10 and 30 tracked sales compare with assigned value and Best Price. The full viewer also includes Roblox's daily resale prices and volume where available.
 - **Profiles and inventories** with RAP and value totals for loaded copies, a paginated breakdown, serial numbers where available, and RoliBadges. Eligible profiles can show a **Trade Items** shortcut in narrow layouts.
 - **Trade comparisons** on selected trades and send and counter forms. Each offer shows its Rolimon's total below the native total, which is labeled `(RAP)`. The Rolimon's total uses the same item fallbacks and Robux amounts as the value comparison. Limited-item cards show Roblox RAP, Rolimon's value or a labeled RAP fallback, and demand, state, and sales history where available. Centered badges between the offers show signed RAP and value changes, with Robux and Rolimon's icons and green and red indicators for gains and losses.
-- **Local overpay benchmarks** on item and trade pages. The opt-in pilot shows sample counts, date windows, and source posts for observed submitted-proof overpay. Summary statistics appear once a trade shape has at least 10 eligible proofs.
+- **Overpay** on limited Marketplace asset pages. Compare one-for-one and one-for-many exchanges with median OP, median OP percentage, priced sample size, UTC date range, and individual recent trades from RoUtility.
 - **Item trade history** from RoUtility. Select **View trades** on a Roblox Marketplace asset page to see both sides of tracked exchanges, their observation times, and RoUtility's reported RAP and Value. A local report resolves historical Rolimon's valuations and gives per-item swap, upgrade, and downgrade overpay statistics for exported trades.
 - **Reference links** to Rolimon's item, bundle, sales, and player pages.
 - **Toolbar popup and settings** with Roblox sign-in status, Trades tab detection, an **Open Trades** shortcut, and a saved system, light, or dark appearance preference.
@@ -22,7 +22,7 @@ Roxol is a Chrome and Edge extension for Roblox limited items and trading. It us
 - **Per-item USD estimates** from RoUtility where available, with a separate optional estimate using a user-entered rate and live Rolimon's value.
 - **Mass Trade Sender** with offer selection, manual recipient entry, a review queue, progress tracking, and native trade forms for manual sending. Owner discovery is planned once the data is verified.
 
-- **Expanded overpay analytics** with a primary benchmark based on verified proofs and their submitted totals. Complete Rolimon's historical pricing will support a cross-check. More proof coverage, a RoPost cross-check, and sales-based lookback windows are also planned. See the [overpay analytics plan](OVERPAY_ANALYTICS_PLAN.md).
+- **Expanded overpay analytics** with broader trade coverage and sales-based lookback windows. The historical proof research is documented in the [overpay analytics plan](OVERPAY_ANALYTICS_PLAN.md).
 - **Expanded market data exports** with reseller depth, resale activity, supply, and trade advertisements. Proof lookup can ship independently. See the [market data acquisition plan](MARKET_DATA_PLAN.md).
 
 **Ideas under consideration** include a **Might drop** forecast that tracks sustained pressure below a value threshold, plus buy, sell, and trade calculators that account for volume, liquidity, outliers, and sparse or stale data.
@@ -35,9 +35,17 @@ The limited-card **Copy ID** control is disabled while its implementation is kep
 
 Roxol reuses item and resale helpers from Nevos. [Nevos source license](extension/vendor/nevos/LICENSE)
 
+## Item overpay
+
+On a limited Marketplace asset page, the **Overpay** section appears below Roxol's item metrics. It samples the first page of public RoUtility history (up to 20 tracked trades) and fetches Rolimon's profiles for historical pricing. Switch between **One-for-one** and **One-for-many** to see each group's statistics and up to five recent exchanges. The same sampled history page can be reused when you open **View trades**.
+
+OP is the historical value of the other basket minus the value of the single copy of the page item you give. OP percentage divides each difference by that copy's historical value before taking the median. Roxol uses Rolimon's Value in effect during the observation interval or same-day RAP when the item was unvalued. Only fully priced trades contribute to medians. **Priced trades** shows that sample size out of the eligible trades, and **Observed dates (UTC)** covers the group's eligible records. Missing valuations show as a dash. Thin samples are labeled, side payments are unknown, and RoUtility's observation date can differ from the completion date. [Historical valuation and eligibility rules](tools/overpay/README.md#historical-overpay-statistics)
+
+To verify the section, open Black Iron Antlers (asset `398674411`) in Edge with Roxol loaded. Wait for the Overpay figures, switch both trade types, and check the sample count and dates alongside the signed OP shown for each trade. Repeat at desktop and narrow widths. [Edge CDP verification workflow](AGENTS.md)
+
 ## RoUtility trade history
 
-Roxol requests public history from `routility.io` when you open the viewer or change pages. Requests send the asset ID and page number without cookies. RoUtility reports when it observed the exchanges and cannot see side payments. Unavailable figures appear as a dash.
+Roxol requests public history from `routility.io` when the Overpay section loads or you open or page through the viewer. Requests send the asset ID and page number without cookies. RoUtility reports when it observed the exchanges and cannot see side payments. Unavailable figures appear as a dash.
 
 **Export viewed trades** downloads JSON for the pages visited since opening the viewer. It includes source page coverage and fetch times, deduplicated trade records, and both item baskets with quantities, available copy IDs, observation times, and RoUtility's RAP and `valueThen`. Missing fields are `null`. An explicit zero remains zero in the export. The export omits participant identifiers and side payments.
 
@@ -50,59 +58,3 @@ To verify the integration, open Black Iron Antlers (asset `398674411`) in Edge w
 ## Contributing
 
 After each implementation, update the relevant README files and include those updates in the same commit. Summarize what changed in the commit subject and explain why in the commit body. Push to the corresponding GitHub branch and verify that its tip matches the local commit.
-
-## Local overpay pilot
-
-Roxol can compare observed submitted-proof overpay for isolated limited items. The pilot uses the Rolimon's Discord proof channel and Rolimon's historical assigned values. An independent cross-check with RoPost's Proof Checker is pending.
-
-1. Run `node tools/overpay/sign-in.mjs` from the workspace root. Sign in to the Discord alt in the dedicated Edge window, confirm that it can open **#value-requests**, and close that window.
-2. Run `node tools/overpay/collect.mjs <discord-username> 75` with Node 22 or later. The first run reads the latest 75 posts. Subsequent runs reuse that profile, catch up from the saved checkpoint, and reread 12 posts for edits. A collection aborts if it cannot reach the overlap or save an attachment.
-3. Run `node tools/overpay/analyze.mjs` to produce `pilot.json`. Add `--ocr` if Tesseract is on PATH and you want OCR text alongside unreviewed attachments. Inspect the saved images. Check the completed status, both item baskets, the amounts of Robux, the trade date, and any visible copy or trade IDs. Record a demonstrated staff decision separately. Compare a liquid, a mid-volume, and a rare item with RoPost's `/proof` results and record what matched or differed.
-4. Add verified posts to `reviews.json` using the format below and rerun the analyzer. It reports coverage, exclusions, duplicates, per-item results, and the historical values used. It also writes `benchmarks.json`.
-5. Run `node tools/overpay/serve.mjs` and enable **Local overpay benchmarks** in Roxol's preferences. Reload the Roblox tabs you want to check. The service listens on `127.0.0.1:43127` and serves aggregate statistics and source post links. Roxol marks benchmarks as stale after three days and shows the last successful collection when the service is unavailable.
-
-These commands use `%LOCALAPPDATA%\Roxol\overpay` by default. Set `ROXOL_OVERPAY_DIR` to use a different directory outside the workspace. Discord authentication stays in the dedicated Edge profile. Messages, evidence images, and review records are local. Discord may show that a message was edited without exposing an exact edit timestamp. Those records retain the edited flag and an empty timestamp.
-
-The [collector guide](tools/overpay/README.md) covers backfilling older posts in batches of up to 200.
-
-A review maps a Discord message ID to the screenshot findings. Use the attachment hash listed in `pilot.json`. Item IDs are strings, and each side uses `asset` or `bundle`, an ID, and a quantity. Add `copyId` and `tradeId` when visible. Side order is zero-based for `targetSide` and consistent across the other fields. Use an ISO timestamp with an offset when known. For date-only records, `offsetMinutes` is the offset from UTC if the evidence establishes it. A review example with placeholders:
-
-```json
-{
-  "1450000000000000000": {
-    "evidenceSha256": "<attachment hash from pilot.json>",
-    "completed": true,
-    "staffReview": "unknown",
-    "date": "2026-11-15",
-    "participants": ["Sender", "Receiver"],
-    "baskets": [
-      [{ "kind": "asset", "id": "19027209", "quantity": 1 }],
-      [{ "kind": "asset", "id": "20980138", "quantity": 1 }]
-    ],
-    "robux": [0, 0],
-    "targetSide": 0,
-    "roPost": { "result": "<match, discrepancy, or unavailable>", "reference": "<RoPost lookup or result link>" }
-  }
-}
-```
-
-The benchmark uses a rolling 30-day window and needs 10 eligible trades per item and trade shape. A trend needs 10 in the previous window as well. Voluntary submissions can overrepresent unusually high overpays. Run the analytics fixtures with `node tools/overpay/analytics.test.mjs`.
-
-If a post contains multiple completed trades, use an array of review entries for that message ID and give each entry its matching attachment hash. Use `robuxBasis` to record whether the screenshot shows an offered amount or an amount after the fee. Use `serial` for a visible serial number and `copyId` for an actual copy ID.
-
-### Optional daily Windows collection
-
-After verifying the on-demand collector and its second run, you can register a daily Task Scheduler job from the workspace root. It runs as your Windows user while signed in and starts after a missed run when Windows is next available. The example uses 7 PM local time.
-
-```powershell
-$roxolRoot = (Get-Location).Path
-$roxolNode = (Get-Command node).Source
-$roxolAction = New-ScheduledTaskAction -Execute $roxolNode -WorkingDirectory $roxolRoot `
-  -Argument 'tools/overpay/collect.mjs --use-current-account 75'
-$roxolTrigger = New-ScheduledTaskTrigger -Daily -At 7pm
-$roxolSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew
-Register-ScheduledTask -TaskName 'Roxol Overpay Collection' -Action $roxolAction `
-  -Trigger $roxolTrigger -Settings $roxolSettings -User "$env:USERDOMAIN\$env:USERNAME" -RunLevel Limited
-```
-
-The scheduled job uses the account saved by the first successful collection. After reviewing newly collected proofs, rerun the analyzer to publish an updated benchmark.

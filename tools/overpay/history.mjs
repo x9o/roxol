@@ -1,4 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
+import valuation from "../../extension/shared/trade-valuations.js";
+
+export const { parseHistory, assignmentAt } = valuation;
 
 const origin = "https://www.rolimons.com";
 
@@ -20,50 +23,6 @@ export async function catalog() {
   const data = await (await read("https://api.rolimons.com/items/v3/itemdetails")).json();
   if (!data.success || !data.assets || !data.bundles) throw new Error("Rolimon's item catalog unavailable.");
   return { asset: data.assets, bundle: data.bundles };
-}
-
-export function parseHistory(html, target, currentValue, source, trackedFrom) {
-  const match = /\bvar value_changes\s*=\s*(\[[^;]*\]);/.exec(html);
-  if (!match) return null;
-  let rows;
-  try {
-    rows = JSON.parse(match[1]);
-  } catch {
-    return null;
-  }
-  if (!Array.isArray(rows) || rows.some((row) => !Array.isArray(row))) return null;
-  // Item profiles omit the item ID and type from each row. The standalone change log includes both.
-  const profile = trackedFrom !== undefined;
-  const changes = (profile ? rows.filter((row) => row[1] === 1) : rows.filter(
-    ([, id, type, change]) => String(id) === target.id && type === (target.kind === "bundle" ? 2 : 1) && change === 1,
-  ).map(([seconds, , , change, before, after]) => [seconds, change, before, after]))
-    .map(([seconds, , before, after]) => ({ time: seconds * 1000, before, after }))
-    .sort((a, b) => a.time - b.time);
-  if (profile) {
-    if (!Number.isSafeInteger(trackedFrom) || trackedFrom <= 0) return null;
-    if (changes.some(({ time, before, after }) => time < trackedFrom ||
-        ![before, after].every((value) => value === null || (Number.isSafeInteger(value) && value > 0)))) return null;
-    if (!changes.length && currentValue === null) return { source, changes, unvaluedFrom: trackedFrom };
-  }
-  if (!changes.length || changes.some((entry, i) => !Number.isSafeInteger(entry.time) ||
-      entry.time <= 0 || entry.time > 8.64e15 ||
-      (i > 0 && (entry.time <= changes[i - 1].time || entry.before !== changes[i - 1].after))) ||
-      (currentValue !== undefined && changes.at(-1).after !== currentValue)) return null;
-  return {
-    source, changes,
-    ...(profile && changes[0].before === null ? { unvaluedFrom: trackedFrom } : {}),
-  };
-}
-
-export function assignmentAt(history, from, through = from) {
-  if (!history || !Number.isFinite(from) || !Number.isFinite(through) || through < from ||
-      history.changes.some(({ time }) => time > from && time <= through)) return null;
-  const change = history.changes.findLast(({ time }) => time <= from);
-  if (change) return { value: change.after, effectiveAt: new Date(change.time).toISOString(), source: history.source };
-  if (history.unvaluedFrom <= from) {
-    return { value: null, effectiveAt: new Date(history.unvaluedFrom).toISOString(), source: history.source };
-  }
-  return null;
 }
 
 export async function getHistory(target, items) {

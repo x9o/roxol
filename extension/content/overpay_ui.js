@@ -1,67 +1,130 @@
 const RoxolOverpay = (() => {
-  const { element, link } = RoxolMarketUI;
+  const ui = RoxolMarketUI;
+  const { element } = ui;
   const signed = new Intl.NumberFormat(undefined, { signDisplay: "exceptZero", maximumFractionDigits: 1 });
+  const percent = new Intl.NumberFormat(undefined, {
+    style: "percent", signDisplay: "exceptZero", maximumFractionDigits: 1,
+  });
   const date = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" });
-  const syncDate = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" });
-  const showDate = (value) => Number.isFinite(Date.parse(value)) ? date.format(new Date(value)) : null;
-  const label = { swap: "One-for-one swap", "one-for-many": "One-for-many" };
-  const sourcePattern = /^https:\/\/discord\.com\/channels\/415246288779608064\/535250426061258753\/[1-9]\d{0,19}$/;
+  const observationTime = new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium", timeStyle: "short", timeZone: "UTC",
+  });
 
-  function request(item) {
-    return chrome.runtime.sendMessage({ type: "roxol:overpay-item", item })
-      .catch(() => ({ status: "unavailable" }));
+  function figure(value, formatter) {
+    const number = element("span", "roxol-overpay-figure", value == null ? "—" : formatter.format(value));
+    if (value) number.dataset.direction = value > 0 ? "up" : "down";
+    return number;
   }
 
-  function render(data, { shape, perspective } = {}) {
-    if (!data || data.status === "disabled") return null;
-    const panel = element("section", "roxol-market roxol-overpay");
-    panel.setAttribute("aria-label", "Observed submitted-proof overpay");
-    panel.append(element("strong", "roxol-overpay-heading",
-      perspective ? "Observed submitted-proof OP · " + perspective : "Observed submitted-proof OP"));
-    const last = Number.isFinite(Date.parse(data.lastCollection)) ? syncDate.format(new Date(data.lastCollection)) : null;
-    if (data.status === "unavailable") {
-      panel.append(element("p", "", "Benchmark service unavailable."));
-    } else {
-      if (data.status === "stale") {
-        panel.append(element("p", "roxol-overpay-status", data.offline ? "Offline · saved benchmark" : "Stale benchmark"));
-      }
-      for (const key of shape ? [shape] : Object.keys(label)) {
-        const group = data.groups?.[key];
-        const row = element("div", "roxol-overpay-group");
-        const count = group?.count ?? 0;
-        row.append(element("strong", "", label[key]));
-        const window = group?.window;
-        const from = showDate(window?.from);
-        const to = showDate(window?.to);
-        row.append(element("span", "", count + (count === 1 ? " proof" : " proofs") +
-          (from && to ? " · " + from + " – " + to : " · last 30 days")));
-        if (Number.isFinite(group?.median) && Number.isFinite(group?.mean) &&
-            group.middle50?.length === 2 && group.middle50.every(Number.isFinite)) {
-          row.append(element("span", "", "Median " + signed.format(group.median) +
-            " · Mean " + signed.format(group.mean) + " · Middle 50% " + group.middle50.map(signed.format).join(" to ")));
-          if (Number.isFinite(group.trend)) row.append(element("span", "", "Median change " + signed.format(group.trend) + " vs prior 30 days"));
-        } else {
-          row.append(element("span", "roxol-overpay-status", "Benchmark needs " + (group?.minimum ?? 10) + " proofs"));
-        }
-        const links = Array.isArray(group?.links) ? group.links.filter((url) => sourcePattern.test(url)) : [];
-        if (links.length) {
-          const proofList = element("details", "roxol-overpay-proofs");
-          proofList.append(element("summary", "", "Source posts (" + links.length + ")"));
-          const list = element("ul");
-          for (const [index, url] of links.entries()) {
-            const item = element("li");
-            item.append(link("Proof " + (index + 1), url, true));
-            list.append(item);
-          }
-          proofList.append(list);
-          row.append(proofList);
-        }
-        panel.append(row);
-      }
-      panel.append(element("p", "", "Voluntary submissions can overrepresent unusually high overpays."));
+  function stat(label, content) {
+    const cell = element("div");
+    const value = element("dd");
+    value.append(content);
+    cell.append(element("dt", "", label), value);
+    return cell;
+  }
+
+  function tradeRow(trade) {
+    const row = element("li", "roxol-overpay-trade");
+    const received = element("ul", "roxol-overpay-basket");
+    const items = new Map();
+    for (const item of trade.opposite) {
+      const previous = items.get(item.assetId);
+      items.set(item.assetId, {
+        name: previous?.name || item.name,
+        quantity: (previous?.quantity ?? 0) + item.quantity,
+      });
     }
-    if (last) panel.append(element("p", "", "Last collected " + last + " UTC"));
+    for (const [assetId, { name, quantity }] of items) {
+      const item = element("li");
+      const label = name || `Asset ${assetId}`;
+      item.append(ui.link(label, RoxolTargets.robloxItemUrl({ kind: "asset", id: assetId }), true));
+      if (quantity > 1) item.append(` ×${ui.format(quantity)}`);
+      received.append(item);
+    }
+    const observed = element("time", "", observationTime.format(new Date(trade.observedAt)) + " UTC");
+    observed.dateTime = trade.observedAt;
+    const caption = element("div", "roxol-overpay-caption");
+    caption.append(observed);
+    if (trade.inferred) caption.append(" · Inferred");
+    const values = element("div", "roxol-overpay-trade-values");
+    values.append(figure(trade.overpay, signed), figure(trade.percent == null ? null : trade.percent / 100, percent));
+    const details = element("div");
+    details.append(received, caption);
+    row.append(details, values);
+    return row;
+  }
+
+  function renderGroup(body, { summary, recent }) {
+    const { sampleSize, thinSample, recency, valuationCoverage, overpay, overpayPercent } = summary;
+    const { firstObservedAt, lastObservedAt } = recency;
+    const dates = firstObservedAt && lastObservedAt
+      ? date.formatRange(new Date(firstObservedAt), new Date(lastObservedAt)) : "—";
+    const medianPercent = overpayPercent.median == null ? null : overpayPercent.median / 100;
+    const stats = element("dl", "roxol-overpay-stats");
+    stats.append(
+      stat("Median OP", figure(overpay.median, signed)),
+      stat("Median OP %", figure(medianPercent, percent)),
+      stat("Priced trades", `${ui.format(sampleSize)} of ${ui.format(valuationCoverage.eligibleTrades)}`),
+      stat("Observed dates (UTC)", dates),
+    );
+    body.replaceChildren(stats);
+    if (!recent.length) {
+      body.append(element("p", "roxol-overpay-note", "No eligible trades of this type in the sample."));
+      return;
+    }
+    if (thinSample) {
+      body.append(element("p", "roxol-overpay-note", sampleSize
+        ? "Small sample · fewer than 10 priced trades."
+        : "Historical values were unavailable for these trades."));
+    }
+    const list = element("ul", "roxol-overpay-trades");
+    list.append(...recent.map(tradeRow));
+    body.append(element("h3", "roxol-overpay-list-heading", "Recent trades"), list);
+  }
+
+  function mount(assetId) {
+    const panel = element("section", "roxol-market roxol-overpay");
+    panel.setAttribute("aria-label", "Overpay");
+    const header = element("header", "roxol-overpay-header");
+    header.append(element("h2", "roxol-overpay-heading", "Overpay"),
+      ui.link("RoUtility", `https://routility.io/catalog/${assetId}/trades`, true));
+    const status = element("p", "roxol-overpay-note", "Loading overpay…");
+    status.setAttribute("role", "status");
+    panel.append(header, status);
+
+    void ui.request("overpay", { assetId }).then((data) => {
+      if (data?.status !== "ok") {
+        status.textContent = "RoUtility trade data is unavailable.";
+        return;
+      }
+      const { swap, downgrade } = data.groups;
+      if (!swap.recent.length && !downgrade.recent.length) {
+        status.textContent = "No eligible trades in RoUtility’s latest 20 tracked trades.";
+        return;
+      }
+      status.remove();
+      const filter = element("div", "roxol-overpay-filter");
+      filter.setAttribute("role", "group");
+      filter.setAttribute("aria-label", "Trade type");
+      const body = element("div", "roxol-overpay-body");
+      const options = [[ui.button("One-for-one"), swap], [ui.button("One-for-many"), downgrade]];
+      function select(group) {
+        for (const [button, option] of options) button.setAttribute("aria-pressed", String(option === group));
+        renderGroup(body, group);
+      }
+      for (const [button, group] of options) {
+        button.addEventListener("click", () => select(group));
+        filter.append(button);
+      }
+      const note = element("p", "roxol-overpay-note",
+        "Sample of up to 20 tracked trades. OP is the value received minus the value of this item, using historical Rolimon’s Value or RAP. Robux side payments are unknown.");
+      panel.append(filter, body, note);
+      select(downgrade.recent.length ? downgrade : swap);
+    });
+
     return panel;
   }
-  return { request, render };
+
+  return { mount };
 })();
