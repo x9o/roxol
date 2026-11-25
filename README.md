@@ -9,7 +9,7 @@ Roxol is a Chrome and Edge extension for Roblox limited items and trading. It us
 - **Profiles and inventories** with RAP and value totals for loaded copies, a paginated breakdown, serial numbers where available, and RoliBadges. Eligible profiles can show a **Trade Items** shortcut in narrow layouts.
 - **Trade comparisons** on selected trades and send and counter forms. Each offer shows its Rolimon's total below the native total, which is labeled `(RAP)`. The Rolimon's total uses the same item fallbacks and Robux amounts as the value comparison. Limited-item cards show Roblox RAP, Rolimon's value or a labeled RAP fallback, and demand, state, and sales history where available. Centered badges between the offers show signed RAP and value changes, with Robux and Rolimon's icons and green and red indicators for gains and losses.
 - **Local overpay benchmarks** on item and trade pages. The opt-in pilot shows sample counts, date windows, and source posts for observed submitted-proof overpay. Summary statistics appear once a trade shape has at least 10 eligible proofs.
-- **Item trade history** from RoUtility. Select **View trades** on a Roblox Marketplace asset page to see both sides of tracked exchanges, their observation times, and item RAP and historical Value where available. Use **Previous** and **Next** to browse or **View on RoUtility** to open the source.
+- **Item trade history** from RoUtility. Select **View trades** on a Roblox Marketplace asset page to see both sides of tracked exchanges, their observation times, and RoUtility's reported RAP and Value. Use **Previous** and **Next** to browse or **View on RoUtility** to open the source. A local command resolves historical Rolimon's valuations and item-only overpay for exported trades.
 - **Reference links** to Rolimon's item, bundle, sales, and player pages.
 - **Toolbar popup and settings** with Roblox sign-in status, Trades tab detection, an **Open Trades** shortcut, and a saved system, light, or dark appearance preference.
 
@@ -23,7 +23,7 @@ Roxol is a Chrome and Edge extension for Roblox limited items and trading. It us
 - **Mass Trade Sender** with offer selection, manual recipient entry, a review queue, progress tracking, and native trade forms for manual sending. Owner discovery is planned once the data is verified.
 
 - **Expanded overpay analytics** with a primary benchmark based on verified proofs and their submitted totals. Complete Rolimon's historical pricing will support a cross-check. More proof coverage, a RoPost cross-check, and sales-based lookback windows are also planned. See the [overpay analytics plan](OVERPAY_ANALYTICS_PLAN.md).
-- **Expanded market data exports** with cross-checked historical valuations, item-only overpay summaries, reseller depth, resale activity, supply, and trade advertisements. Proof lookup can ship independently. See the [market data acquisition plan](MARKET_DATA_PLAN.md).
+- **Expanded market data exports** with aggregate item-only overpay summaries, reseller depth, resale activity, supply, and trade advertisements. Proof lookup can ship independently. See the [market data acquisition plan](MARKET_DATA_PLAN.md).
 
 **Ideas under consideration** include a **Might drop** forecast that tracks sustained pressure below a value threshold, plus buy, sell, and trade calculators that account for volume, liquidity, outliers, and sparse or stale data.
 
@@ -37,9 +37,11 @@ Roxol reuses item and resale helpers from Nevos. [Nevos source license](extensio
 
 ## RoUtility trade history
 
-Roxol requests public history from `routility.io` when you open the viewer or change pages. Requests send the asset ID and page number without cookies. RoUtility reports when it observed the exchanges and cannot see side payments. Missing RAP or historical Value appears as a dash.
+Roxol requests public history from `routility.io` when you open the viewer or change pages. Requests send the asset ID and page number without cookies. RoUtility reports when it observed the exchanges and cannot see side payments. Unavailable figures appear as a dash.
 
-**Export viewed trades** downloads JSON for the pages visited since opening the viewer. It includes source page coverage and fetch times, deduplicated trade records, and both item baskets with available copy IDs, observation times, RAP, and historical Value. Missing fields are `null`. The export omits participant identifiers and side payments.
+**Export viewed trades** downloads JSON for the pages visited since opening the viewer. It includes source page coverage and fetch times, deduplicated trade records, and both item baskets with quantities, available copy IDs, observation times, and RoUtility's RAP and `valueThen`. Missing fields are `null`. An explicit zero remains zero in the export. The export omits participant identifiers and side payments.
+
+Run `node tools/overpay/resolve-trades.mjs trades.json valued-trades.json` with Node.js 22 or later and Edge on Windows. The report includes Rolimon's historical Value or dated RAP, per-item provenance, both basket totals, and signed item-only overpay. It also includes a separate calculation based on current snapshots. See the [historical valuation guide](tools/overpay/README.md#historical-valuation-of-routility-trades) for the cache, timing rules, and sample results.
 
 To verify the integration, open Black Iron Antlers (asset `398674411`) in Edge with Roxol loaded. Select **View trades**, browse to the second page, and export the viewed trades. Check the two page entries and the two baskets per trade in the file. [Edge CDP verification workflow](AGENTS.md)
 

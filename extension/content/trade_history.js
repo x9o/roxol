@@ -19,8 +19,9 @@ const RoxolTradeHistory = (() => {
         row.append(element("span", "", name));
       }
       if (item.serial) row.append(element("span", "roxol-history-note", ` #${item.serial}`));
+      if (item.quantity > 1) row.append(element("span", "roxol-history-note", ` ×${ui.format(item.quantity)}`));
       row.append(element("div", "roxol-history-note roxol-history-metrics",
-        `RAP ${item.rap == null ? "—" : ui.format(item.rap)} · Value ${item.valueThen == null ? "—" : ui.format(item.valueThen)}`));
+        `RAP ${item.rap == null ? "—" : ui.format(item.rap)} · Value ${item.valueThen > 0 ? ui.format(item.valueThen) : "—"}`));
       list.append(row);
     }
     side.append(element("h3", "roxol-history-side-label", label), list);
@@ -74,7 +75,7 @@ const RoxolTradeHistory = (() => {
     const actions = element("div", "roxol-history-actions");
     actions.append(source, exportButton);
     const note = element("p", "roxol-history-note",
-      "RoUtility tracks item exchanges and reports observation times, RAP and historical Value where available. Side payments are unknown. A dash marks missing data.");
+      "RAP and Value are reported by RoUtility at its observation times. Side payments are unknown. A dash marks an unavailable figure.");
     const previous = ui.button("Previous");
     const next = ui.button("Next");
     const retry = ui.button("Try again");

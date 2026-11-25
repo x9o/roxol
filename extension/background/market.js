@@ -251,7 +251,8 @@
       serial: idOf(item?.serial),
       observedAt: observedAt(item?.ts),
       rap: amount(item?.rap),
-      valueThen: amount(item?.value_then) || null,
+      valueThen: amount(item?.value_then),
+      quantity: item?.quantity === undefined ? 1 : amount(item.quantity) || null,
     }));
   }
 
