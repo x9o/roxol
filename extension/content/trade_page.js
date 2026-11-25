@@ -18,6 +18,7 @@
   const percent = new Intl.NumberFormat(undefined, { style: "percent", signDisplay: "exceptZero", maximumFractionDigits: 1 });
   const itemRequests = new Map();
   const widgets = new Map();
+  const offerTotals = new Map();
   let selection;
   let priorDetail;
   let comparison;
@@ -227,6 +228,37 @@
     return sum;
   }
 
+  function renderOfferTotals(offers, values) {
+    const active = new Set();
+    for (const [side, { offer }] of offers.entries()) {
+      const rap = offer.querySelector(".robux-line:not(.ng-hide):not([ng-show]) .robux-line-amount .robux-line-value.text-robux-lg");
+      if (!rap) continue;
+      active.add(rap);
+      let widget = offerTotals.get(rap);
+      if (!widget) {
+        const group = ui.element("span", "roxol-market roxol-trade-total", " (RAP)");
+        const row = ui.element("span", "roxol-trade-total-value text-robux-lg");
+        const icon = ui.icon("rolimons");
+        icon.alt = "Rolimon's value";
+        const number = ui.element("span", "");
+        row.append(icon, number);
+        group.append(row);
+        widget = { group, row, number };
+        offerTotals.set(rap, widget);
+      }
+      const value = values?.[side];
+      widget.row.hidden = value == null;
+      const formatted = value == null ? "" : ui.format(value);
+      if (widget.number.textContent !== formatted) widget.number.textContent = formatted;
+      if (rap.nextElementSibling !== widget.group) rap.after(widget.group);
+    }
+    for (const [rap, { group }] of offerTotals) {
+      if (active.has(rap)) continue;
+      group.remove();
+      offerTotals.delete(rap);
+    }
+  }
+
   function comparisonChip(label, give, receive) {
     const chip = ui.element("span", "roxol-trade-chip");
     const caption = ui.element("span", "roxol-trade-chip-label", label);
@@ -244,7 +276,7 @@
     return chip;
   }
 
-  function mountComparison(next, offers) {
+  function mountComparison(next, offers, values) {
     const [first, second] = next.displayed;
     if (!comparison) {
       comparison = ui.element("div", "roxol-market roxol-trade-comparison");
@@ -252,7 +284,7 @@
       comparison.setAttribute("aria-label", "Trade comparison, receive minus give");
       comparison.setAttribute("aria-live", "polite");
     }
-    const totals = ["RAP", "Value"].map((label) => [label, ...offers.map((offer) => total(offer, label))]);
+    const totals = [["RAP", ...offers.map((offer) => total(offer, "RAP"))], ["Value", ...values]];
     const signature = totals.map((row) => row.join("|")).join("/");
     if (comparison.dataset.totals !== signature) {
       for (const chip of comparison.querySelectorAll(".roxol-trade-chip")) chip.remove();
@@ -322,7 +354,9 @@
     const cards = [...(offers?.flatMap((offer) => offer.cards) ?? []), ...next.picker];
     loadMetadata([...cards, ...(offers?.flatMap((offer) => offer.prices) ?? [])]);
     renderCards(cards);
-    if (offers) mountComparison(next, offers);
+    const values = offers?.map((offer) => total(offer, "Value"));
+    renderOfferTotals(next.offers, values);
+    if (offers) mountComparison(next, offers, values);
     else {
       comparison?.remove();
       comparison = null;

@@ -251,6 +251,25 @@
 }
 .roxol-card-overlay .roxol-sales-preview { pointer-events: auto; }
 .roxol-card .roxol-metrics .roxol-metric dd { font-size: 1em; }
+.roxol-market.roxol-trade-total {
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.roxol-trade-total-value {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.roxol-trade-total-value .roxol-icon {
+  width: 1em;
+  height: 1em;
+  margin: 0;
+}
+
 .roxol-market.roxol-trade-comparison {
   clear: both;
   display: flex;
