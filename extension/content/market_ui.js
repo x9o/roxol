@@ -109,6 +109,15 @@ const RoxolMarketUI = (() => {
       .catch(() => ({ status: "unavailable" }));
   }
 
+  function downloadJson(filename, report) {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2) + "\n"], { type: "application/json" }));
+    const anchor = element("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   function rolimonsItemUrl(item) {
     return RolimonsItemDetails.profile_url(item.id, null, { isBundle: item.kind === "bundle" });
   }
@@ -910,5 +919,5 @@ const RoxolMarketUI = (() => {
     return paint;
   }
 
-  return { element, link, titleLink, button, icon, metric, format, request, rolimonsItemUrl, itemPanel, mountCard, cardValue, cardPriceSelector, bestPriceDeals, inventoryView, showPlayerBadges, showDialog, closeDialog };
+  return { element, link, titleLink, button, icon, metric, format, request, downloadJson, rolimonsItemUrl, itemPanel, mountCard, cardValue, cardPriceSelector, bestPriceDeals, inventoryView, showPlayerBadges, showDialog, closeDialog };
 })();

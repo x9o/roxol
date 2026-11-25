@@ -2,7 +2,6 @@ const RoxolOverpaySampling = (() => {
   const pageSize = 50;
   const rawCap = 500;
   const target = 100;
-  const retryPricingAfter = 5 * 60_000;
 
   async function sampleItem({ assetId, previous, readPage, readTradeProfile, now = Date.now() }) {
     const { itemPreview, previewSample, isolatedSide, unusualComposition, tradeGroup, recentDays } = RoxolItemOverpay;
@@ -11,7 +10,12 @@ const RoxolOverpaySampling = (() => {
     const eligible = [];
     const seen = new Set();
     const counts = { swap: 0, downgrade: 0 };
-    const previousById = new Map(previous.flatMap((row, index) => row.id ? [[row.id, index]] : []));
+    const exclusions = {};
+    let pricingRetryAt = null;
+    const previousById = new Map();
+    for (const [index, { id }] of previous.entries()) {
+      if (id && !previousById.has(id)) previousById.set(id, index);
+    }
     let reason;
 
     async function consume(rows) {
@@ -24,23 +28,27 @@ const RoxolOverpaySampling = (() => {
         const row = prior === incoming ||
           (prior?.sample && JSON.stringify(prior.trade) === JSON.stringify(trade)) ? { ...prior } : { ...incoming };
         records.push(row);
+        delete row.exclusion;
         // RoUtility pages in decreasing order of its first observation timestamp.
         const first = Date.parse(firstObservedAt);
-        if (first <= cutoff) {
-          reason = "date";
-          break;
+        if (first <= cutoff) reason = "date";
+        if (reason === "date") row.exclusion = "outside-window";
+        else if (!trade) row.exclusion = row.invalidReason ?? "invalid-source-record";
+        else if (seen.has(id)) row.exclusion = "duplicate-trade";
+        else {
+          seen.add(id);
+          const { from, through, valid } = RoxolTradeValuations.observationWindow(trade);
+          const sides = [trade.sideA, trade.sideB];
+          const isolated = isolatedSide(sides, assetId);
+          row.exclusion = !valid || through > now ? "invalid-observation-time" :
+            from <= cutoff ? "outside-window" : unusualComposition(sides) ??
+            (isolated < 0 ? "target-bundled" : null);
+          if (!row.exclusion) {
+            batch.push({ row, group: tradeGroup(sides[1 - isolated]) });
+            if (row.sample?.overpay == null) pending.push({ row, from, through });
+          }
         }
-        if (!trade || seen.has(id)) continue;
-        seen.add(id);
-        const { from, through, valid } = RoxolTradeValuations.observationWindow(trade);
-        const sides = [trade.sideA, trade.sideB];
-        const isolated = isolatedSide(sides, assetId);
-        if (!valid || from <= cutoff || through > now || isolated < 0 || unusualComposition(sides)) continue;
-        batch.push({ row, group: tradeGroup(sides[1 - isolated]) });
-        const retryAfter = row.pricingIncomplete ? 2 * 60_000 : retryPricingAfter;
-        if (row.sample?.overpay == null && !(row.pricedAt > now - retryAfter)) {
-          pending.push({ row, from, through });
-        }
+        if (row.exclusion) exclusions[row.exclusion] = (exclusions[row.exclusion] ?? 0) + 1;
       }
 
       if (pending.length) {
@@ -52,29 +60,39 @@ const RoxolOverpaySampling = (() => {
             needed.set(id, { through: Math.max(through, prior?.through ?? 0), uses: (prior?.uses ?? 0) + 1 });
           }
         }
-        const focalProfile = await readTradeProfile(assetId, needed.get(assetId).through);
-        const profiles = new Map([[assetId, focalProfile]]);
+        const lookups = new Map([[assetId, await readTradeProfile(assetId, needed.get(assetId).through)]]);
         needed.delete(assetId);
-        if (focalProfile) {
+        if (lookups.get(assetId).profile?.history) {
           const queue = [...needed.entries()].sort((a, b) => b[1].uses - a[1].uses).values();
           // Keep the shared market request queue available for other panels and tabs.
           await Promise.all(Array.from({ length: Math.min(8, needed.size) }, async () => {
-            for (const [id, { through }] of queue) profiles.set(id, await readTradeProfile(id, through));
+            for (const [id, { through }] of queue) lookups.set(id, await readTradeProfile(id, through));
           }));
         }
+        const profiles = new Map([...lookups].map(([id, { profile }]) => [id, profile]));
         const valued = RoxolTradeValuations.resolveTrades(pending.map(({ row }) => row.trade), profiles);
         pending.forEach(({ row, from }, index) => {
           row.sample = previewSample(valued[index], assetId, from);
-          row.pricedAt = now;
-          row.pricingIncomplete = [...row.trade.sideA, ...row.trade.sideB].some(({ assetId: id }) => !profiles.get(id));
+          row.sample.pricingFailures = row.sample.pricingFailures.map((failure) => {
+            if (!failure.assetId) return failure;
+            const lookup = lookups.get(failure.assetId);
+            if (!lookup) return { ...failure, reason: "deferred-focal-profile-unavailable" };
+            if (lookup.failure && (!lookup.profile || failure.reason === "observation-after-profile")) {
+              if (lookup.retryAt) pricingRetryAt = Math.min(pricingRetryAt ?? Infinity, lookup.retryAt);
+              return { ...failure, ...lookup.failure };
+            }
+            return { ...failure, httpStatus: lookup.profile ? 200 : null };
+          });
+          row.pricingIncomplete = row.sample.pricingFailures.some(({ reason }) =>
+            reason.startsWith("profile-") || reason.startsWith("deferred-"));
         });
       }
 
       for (const { row, group } of batch) {
         eligible.push(row);
-        if (row.sample.overpay !== null) counts[group]++;
+        if (row.sample.overpay !== null && !row.sample.imbalanced) counts[group]++;
       }
-      if (counts.swap >= target && counts.downgrade >= target) reason = "target";
+      if (!reason && counts.swap >= target && counts.downgrade >= target) reason = "target";
       if (!reason && records.length === rawCap) reason = "cap";
     }
 
@@ -83,9 +101,10 @@ const RoxolOverpaySampling = (() => {
     for (let requests = 0; requests < rawCap / pageSize && !reason; requests++) {
       const page = Math.floor(offset / pageSize) + 1;
       const skip = offset % pageSize;
-      const history = await readPage(page, pageSize).catch(() => null);
+      const history = await readPage(page, pageSize).catch((error) => ({ message: error.message }));
       if (history?.status !== "ok") {
-        if (!offset && !previous.length) return { status: "unavailable" };
+        const historyFailure = { page, httpStatus: history?.httpStatus ?? null, message: history?.message ?? null };
+        if (!offset && !previous.length) return { status: "unavailable", historyFailure };
         if (!offset) {
           for (let index = 0; index < previous.length && !reason; index += pageSize) {
             await consume(previous.slice(index, index + pageSize));
@@ -93,6 +112,7 @@ const RoxolOverpaySampling = (() => {
         }
         return result({
           partial: true,
+          historyFailure,
           ...(offset && (reusedTail || records.length >= previous.length) ? { records } : {}),
         });
       }
@@ -124,8 +144,12 @@ const RoxolOverpaySampling = (() => {
     return result({ reason: reason ?? "cap", records });
 
     function result(coverage) {
+      const audit = records.map(({ id, firstObservedAt, trade, rejectedTrade, exclusion, sample }) => ({
+        id, firstObservedAt, trade: trade ?? rejectedTrade ?? null, exclusion, ...(exclusion ? {} : { sample }),
+      }));
       return {
-        status: "ok", ...coverage,
+        status: "ok", asOf: new Date(now).toISOString(), fromExclusive: new Date(cutoff).toISOString(), ...coverage,
+        pricingRetryAt, audit, exclusions,
         pricingIncomplete: eligible.some((row) => row.pricingIncomplete),
         groups: itemPreview(eligible, assetId, now),
       };

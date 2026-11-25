@@ -34,9 +34,9 @@ async function sample(rows, { previous = [], unavailablePage, unavailableProfile
     async readTradeProfile(id) {
       profiles.push(id);
       const value = { 101: 100, 102: 110, 103: 55, 104: 130 }[id];
-      return value && id !== unavailableProfile ? { checkedAt: asOf, rap: [], history: {
+      return value && id !== unavailableProfile ? { profile: { checkedAt: asOf, rap: [], history: {
         changes: [{ time: now - 100 * day, after: value }],
-      } } : null;
+      } } } : { profile: null, failure: { reason: "profile-http-error", httpStatus: 429 }, retryAt: asOf + 60_000 };
     },
   });
   return { ...result, pages, profiles };
@@ -57,6 +57,12 @@ test("high demand stops when both categories have 100 priced trades, excluding d
   assert.equal(result.groups.swap.summary.overpay.iqr, 0);
   assert.equal(result.groups.swap.history[0].observedAt, rows[3].firstObservedAt);
   assert.equal(result.pricingIncomplete, true);
+  assert.deepEqual(result.groups.swap.summary.unpricedReasons, { "profile-http-error": 1 });
+  assert.deepEqual(result.groups.swap.history[0].pricingFailures,
+    [{ assetId: "999", reason: "profile-http-error", httpStatus: 429 }]);
+  assert.equal(result.pricingRetryAt, now + 60_000);
+  assert.deepEqual(result.exclusions, { "duplicate-trade": 1 });
+  assert.equal(result.audit.length, 250);
 });
 
 test("low demand stops at the 30-day boundary and rare history stops at the end of the feed", async () => {
@@ -66,6 +72,8 @@ test("low demand stops at the 30-day boundary and rare history stops at the end 
   assert.deepEqual(low.pages, [1, 2]);
   assert.equal(low.reason, "date");
   assert.equal(low.groups.swap.summary.sampleSize, 55);
+  assert.equal(low.audit.length, 60);
+  assert.deepEqual(low.exclusions, { "outside-window": 5 });
   assert.ok(!low.profiles.includes("999"));
   for (const [count, confidence] of [[0, "insufficient"], [9, "insufficient"], [10, "low"], [29, "low"], [30, "standard"]]) {
     const result = await sample(rows.slice(0, count));
@@ -91,6 +99,8 @@ test("unavailable focal pricing skips counterpart lookups and can recover on ref
   assert.equal(first.pricingIncomplete, true);
   assert.equal(first.groups.swap.summary.sampleSize, 0);
   assert.equal(first.groups.swap.history.length, 1);
+  assert.deepEqual(first.groups.swap.summary.unpricedReasons,
+    { "profile-http-error": 1, "deferred-focal-profile-unavailable": 1 });
 
   const again = await sample(rows, { previous: first.records, asOf: now + 120_000 });
   assert.equal(again.pricingIncomplete, false);

@@ -49,11 +49,14 @@ node tools/overpay/overpay-sampling.test.mjs
 
 Open `itemOverpay.items[assetId]` in the valuation report. Each group's `recent` window covers the last 30 days and `allObserved` covers observations supplied in the input. Exported pages determine how much of each window is represented.
 
-The Marketplace sampler uses RoUtility's newest-first first-observation order to stop at the 30-day boundary. Its fixtures exercise the priced targets, raw cap, date boundary, sparse histories, confidence thresholds, and refreshes that reuse cached trades and historical prices. The standalone valuation report works from the supplied export and uses the end of each observation interval for its recent window.
+The Marketplace sampler uses RoUtility's newest-first first-observation order to stop at the 30-day boundary. **Download sample audit** includes all sampled records in `audit`, with eligibility exclusions, per-trade pricing failures, and imbalance flags. The top-level `exclusions` tallies eligibility reasons and `trades` contains the eligible records for the standalone resolver. The extension shares successful historical profiles across asset pages and sessions using IndexedDB. A profile can price observations through its original fetch time. Across tabs, Roxol makes up to 24 new profile requests in a rolling minute. It also observes Rolimon's `Retry-After` response to HTTP 429. Deferred lookups have no HTTP status. An open Overpay panel retries when the wait ends.
+
+The standalone valuation report works from the supplied export and uses the end of each observation interval for its recent window. Its `normalizationExclusions` and `excludedRecords` preserve duplicate and malformed inputs that could not be normalized into `trades`. The `profileFailures` map carries reason codes and observed HTTP statuses by asset ID. Individual resolved records include the severe-imbalance flag and historical valuation gaps by item row.
 
 - OP is historical item value received minus historical item value given. Percentage OP divides each trade's difference by the focal item's historical value before calculating the distribution. For a swap, the perspective gives the focal item. For an upgrade, it receives the focal item alone. For a downgrade, it gives the focal item alone. One-for-many trades contribute once to each perspective for the isolated item, so their signs mirror each other and their counts describe the same trades.
-- Each window reports the median, the 25th and 75th percentiles using linear interpolation, and their difference (IQR) for both OP and percentage OP. Empty groups return null statistics. Groups with fewer than ten fully priced trades are labeled thin. Recency includes the first and last eligible observation, the latest priced observation, and its age in days.
-- Valuation coverage is fully priced trades divided by eligible trades for that item and group, with counts for assigned Value alone and for baskets using RAP. Every copy needs a positive historical valuation. Invalid quantities, duplicate copy IDs, the same asset on both sides, many-for-many trades, bundled targets, and unusable observation times are tallied as exclusions. Distinct copies of the same asset can appear together on one side and each contributes its quantity to the total. The report includes all priced trades and shows how the median changes when removing trades where one basket is worth more than twice the other. Copy-specific premiums are outside the item valuation.
+- Each window reports the median, the 25th and 75th percentiles using linear interpolation, and their difference (IQR) for both OP and percentage OP. The raw distributions include every fully priced eligible trade. The `marketRate` distributions exclude trades where one basket is worth more than twice the other. Empty groups return null statistics. Recency includes the first and last eligible observation, the latest priced observation, and its age in days.
+- Valuation coverage is fully priced trades divided by eligible trades for that item and group, with counts for assigned Value alone and for baskets using RAP. Every copy needs a positive historical valuation. Invalid quantities, duplicate copy IDs, the same asset on both sides, many-for-many trades, bundled targets, and unusable observation times are tallied as exclusions. Distinct copies of the same asset can appear together on one side and each contributes its quantity to the total. Copy-specific premiums are outside the item valuation.
+- Standard market-rate confidence requires at least 30 retained trades, at least 80% pricing coverage, and no more than 10% of priced trades severely imbalanced. Fewer than 10 retained trades yields an insufficient-sample label. Other samples have low confidence. Unpriced-reason counts can overlap within a trade.
 - The calculations use item values for all samples. Robux coverage counts priced samples with unknown, proof-reported zero, and proof-reported nonzero Robux. The resolver carries over amounts only from copy-corroborated proofs and records the fee basis when documented. These amounts stay out of the item-only OP calculations.
 
 ### Completed-trade audit
@@ -76,6 +79,23 @@ The November 25 run used 47 distinct live RoUtility records sampled from four as
 | Crimsonwrath, Duke of Danger | Terrible, rare | 1 / 1 | 5 / 5 | 5 / 5 |
 
 All groups were thin. Fixture tests checked the numeric distributions, missing and stale observations, zero and unknown Robux, multi-copy baskets, exclusions, and ambiguous proof matches.
+
+### Marketplace coverage diagnosis
+
+Two November 25, 2026 retests at commit `1cf770e` reproduced Fall Fairy's 157 eligible trades. They priced 36 and 32 trades, compared with the originally reported 38. The diagnostic run required 138 distinct profiles. All 25 HTTP 200 responses parsed with assigned Value history. Six requests returned HTTP 429 with `Retry-After: 60`, and 107 profile lookups were deferred. Four unpriced trades depended only on profiles that returned 429, 118 depended only on deferred profiles, and three depended on both. The subsequent Black Iron Antlers analysis sampled 176 eligible trades during the cooldown. It made zero profile requests and priced zero trades because the focal lookup was deferred and counterpart lookups were skipped.
+
+The updated live run sampled 500 RoUtility records per item. Fall Fairy excluded 343 records from eligibility (197 bundled targets, 112 many-for-many, 22 invalid baskets, and 12 with the same asset on both sides). Black Iron Antlers excluded 323 (193 bundled targets, 117 many-for-many, 11 invalid baskets, and two with the same asset on both sides). The updated Black Iron Antlers sample had 177 eligible records as the live feed advanced.
+
+| Item | Exchange | Priced / eligible | Raw median OP | Filtered median OP | Severe imbalances | Market-rate confidence |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| Fall Fairy | One-for-one | 91 / 91 | −7,794 (−97.43%) | 0 (0%) | 77 | Low |
+| Fall Fairy | One-for-many | 66 / 66 | +480.5 (+6.01%) | +500 (+6.25%) | 7 | Low |
+| Black Iron Antlers | One-for-one | 83 / 86 | −11,802 (−98.28%) | 0 (0%) | 69 | Low |
+| Black Iron Antlers | One-for-many | 91 / 91 | +1,273 (+10.61%) | +1,273 (+10.61%) | 2 | Standard |
+
+The two analyses together received 219 profile responses with HTTP 200, 14 with HTTP 429 and a 60-second retry time, and five timeouts with no HTTP response. Coverage improved over repeated refreshes and an Edge restart. The reopened session made no repeat requests for profiles that previously returned HTTP 200. The three remaining Black Iron Antlers swaps had complete profiles, but their observation intervals crossed UTC dates and an unvalued counterpart required same-day RAP.
+
+The live listings were checked with headless Edge at 1,440 px and 375 px. A separate fixture checked automatic recovery from HTTP 429, an HTTP 404 and an unrecognized HTTP 200 profile, an audit download retaining duplicate and malformed records, and a second item analysis that reused three shared profiles after an Edge restart. The restart used Developer mode in the disposable test profile to keep the unpacked extension enabled.
 
 ## Discord proof collector
 

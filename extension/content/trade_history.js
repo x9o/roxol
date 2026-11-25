@@ -56,12 +56,7 @@ const RoxolTradeHistory = (() => {
       source: "RoUtility", sourceUrl, assetId, range: "all", pages, exportedAt: new Date().toISOString(),
       trades: [...trades.values()],
     };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2) + "\n"], { type: "application/json" }));
-    const link = element("a");
-    link.href = url;
-    link.download = `roxol-trades-${assetId}.json`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    ui.downloadJson(`roxol-trades-${assetId}.json`, report);
   }
 
   function open(assetId, name, sourceUrl) {

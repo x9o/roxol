@@ -7,7 +7,7 @@ import { browserTargets, connect, launchEdge, waitFor } from "./edge.mjs";
 import { readJson, saveJson } from "./store.mjs";
 import { coverage, normalizeTrades, parseItemProfile, resolveTrades } from "./trade-valuations.mjs";
 import { validateTrades } from "./trade-validation.mjs";
-import { itemOverpay } from "./item-overpay.mjs";
+import { itemOverpay, severelyImbalanced } from "./item-overpay.mjs";
 
 const [input, output, flag, completed, ...extra] = process.argv.slice(2);
 const sameFile = (left, right) => path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase();
@@ -20,7 +20,10 @@ const cacheDir = process.env.ROXOL_TRADE_VALUATION_CACHE ??
   path.join(process.env.LOCALAPPDATA, "Roxol", "trade-valuations");
 const cacheAge = 6 * 60 * 60 * 1000;
 const source = await readJson(input);
-const trades = normalizeTrades(source);
+const excludedRecords = [];
+const trades = normalizeTrades(source, excludedRecords);
+const normalizationExclusions = Object.fromEntries(Object.entries(Object.groupBy(excludedRecords, ({ reason }) => reason))
+  .map(([reason, entries]) => [reason, entries.length]));
 const validation = completed ? validateTrades(trades, await readJson(completed)) : null;
 const needed = new Map();
 for (const trade of trades) {
@@ -34,6 +37,7 @@ for (const trade of trades) {
 
 const profiles = new Map();
 const profileErrors = {};
+const profileFailures = {};
 const requests = { cacheHits: 0, profileRequests: 0 };
 let browser;
 let worker;
@@ -80,21 +84,28 @@ try {
     if (reusable) profiles.set(id, cached.profile);
     if (rateLimited) {
       profileErrors[id] = "Deferred after Rolimon's rate limit. Rerun later to resume.";
+      profileFailures[id] = { reason: "deferred-provider-cooldown", httpStatus: null, triggerHttpStatus: 429 };
       continue;
     }
     try {
       const { status, html, error } = await readProfile(url);
       rateLimited = status === 429;
-      if (error) throw new Error(error);
-      if (!html) throw new Error(`Rolimon's returned HTTP ${status}`);
+      if (error || !html) {
+        profileFailures[id] = { reason: error ? "profile-request-error" : "profile-http-error", httpStatus: status ?? null };
+        throw new Error(error ?? `Rolimon's returned HTTP ${status}`);
+      }
       const profile = parseItemProfile(html, id, url, Date.now());
-      if (!profile) throw new Error("Unrecognized Rolimon's item profile");
+      if (!profile) {
+        profileFailures[id] = { reason: "profile-unrecognized", httpStatus: status };
+        throw new Error("Unrecognized Rolimon's item profile");
+      }
       if (profile.history) {
         await saveJson(file, { version: 1, profile });
         profiles.set(id, profile);
       } else {
         if (!reusable) profiles.set(id, profile);
         profileErrors[id] = "Incomplete Rolimon's assigned Value history.";
+        profileFailures[id] = { reason: "incomplete-assigned-value-history", httpStatus: status };
       }
     } catch (error) {
       if (!worker) throw error;
@@ -108,7 +119,13 @@ try {
 
 const resolved = resolveTrades(trades, profiles).map((trade) => {
   const proof = validation?.matched.get(trade.tradeId);
-  return proof?.status === "copy-corroborated" ? { ...trade, robux: proof.robux } : trade;
+  const { sideATotal, sideBTotal } = trade.historicalItemOnlyOverpay;
+  const priced = [...trade.sideA, ...trade.sideB].every((item) => item.historical?.value > 0);
+  return {
+    ...trade,
+    robux: proof?.status === "copy-corroborated" ? proof.robux : trade.robux,
+    severelyImbalanced: priced && severelyImbalanced(sideATotal, sideBTotal),
+  };
 });
 const summary = coverage(resolved);
 const generatedAt = Date.now();
@@ -123,6 +140,9 @@ await saveJson(output, {
   coverage: summary,
   requests,
   profileErrors,
+  profileFailures,
+  normalizationExclusions,
+  excludedRecords,
   validation: validation ? { summary: validation.summary, proofs: validation.proofs } : null,
   itemOverpay: itemOverpay(resolved, generatedAt),
   trades: resolved,

@@ -24,15 +24,27 @@ function observation(row, field, rawField) {
   return timestamp(row?.[rawField]);
 }
 
-export function normalizeTrades(input) {
+export function normalizeTrades(input, excludedRecords = []) {
   if (!Array.isArray(input?.trades)) throw new Error("Expected a RoUtility response or Roxol export with a trades array.");
   const trades = new Map();
-  for (const row of input.trades) {
+  const originals = new Map();
+  for (const [index, row] of input.trades.entries()) {
     const tradeId = row?.tradeId ?? row?.trade_id;
-    if (typeof tradeId !== "string" || !tradeId || (row.kind !== undefined && row.kind !== "trade")) continue;
-    const a = row.sideA ?? row.side_a_items;
-    const b = row.sideB ?? row.side_b_items;
-    if (!Array.isArray(a) || !Array.isArray(b) || !a.length || !b.length) continue;
+    const a = row?.sideA ?? row?.side_a_items;
+    const b = row?.sideB ?? row?.side_b_items;
+    const reason = typeof tradeId !== "string" || !tradeId || (row.kind !== undefined && row.kind !== "trade")
+      ? "invalid-source-record" : !Array.isArray(a) || !Array.isArray(b) || !a.length || !b.length
+        ? "missing-basket" : null;
+    const { side_a, side_b, participants, ...withoutParticipants } = row ?? {};
+    const record = row && typeof row === "object" && !Array.isArray(row) ? withoutParticipants : row;
+    if (reason) {
+      excludedRecords.push({ index, reason, record });
+      continue;
+    }
+    if (originals.has(tradeId)) {
+      excludedRecords.push({ ...originals.get(tradeId), reason: "duplicate-trade" });
+    }
+    originals.set(tradeId, { index, record });
     trades.set(tradeId, {
       tradeId, inferred: typeof row.inferred === "boolean" ? row.inferred : null,
       firstObservedAt: iso(observation(row, "firstObservedAt", "ts")),
@@ -60,9 +72,10 @@ export function coverage(trades) {
       .every((item) => item.quantity !== null && item.valueThen > 0)).length,
     historicalAssignedValueCopies: count((item) => item.historical?.method === "assigned-value"),
     historicalRapCopies: count((item) => item.historical?.method === "rap-snapshot"),
-    fullyHistoricallyPricedTrades: trades.filter((trade) => trade.historicalItemOnlyOverpay.signedOverpay !== null).length,
+    fullyHistoricallyPricedTrades: trades.filter((trade) => trade.historicalItemOnlyOverpay.signedOverpay !== null &&
+      items(trade).every((item) => item.historical?.value > 0)).length,
     fullyCurrentlyPricedTrades: trades.filter((trade) => trade.currentItemOnlyOverpay.signedOverpay !== null).length,
     valueThenComparisons: tally("valueThenComparison"),
-    unresolvedHistoricalCopies: count((item) => item.historical === null),
+    unresolvedHistoricalCopies: count((item) => !(item.historical?.value > 0)),
   };
 }

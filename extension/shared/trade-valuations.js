@@ -80,18 +80,21 @@ const RoxolTradeValuations = (() => {
     const history = parseHistory(html, { kind: "asset", id }, details.value, source, trackedFrom);
     const chart = embeddedJson(html, "history_data");
     const rap = [];
+    let rapHistoryUnavailable = "missing-or-invalid-rap-history";
     if (Array.isArray(chart?.timestamp) && Array.isArray(chart.rap) &&
         chart.timestamp.length === chart.rap.length && chart.num_points === chart.rap.length) {
+      rapHistoryUnavailable = null;
       for (const [index, seconds] of chart.timestamp.entries()) {
         const time = timestamp(seconds);
         if (!time || time <= (rap.at(-1)?.[0] ?? 0) || time > checkedAt) {
           rap.length = 0;
+          rapHistoryUnavailable = "missing-or-invalid-rap-history";
           break;
         }
         rap.push([time, amount(chart.rap[index])]);
       }
     }
-    return { checkedAt, source, history, rap, currentValue: details.value, currentRap: amount(details.rap) };
+    return { checkedAt, source, history, rap, rapHistoryUnavailable, currentValue: details.value, currentRap: amount(details.rap) };
   }
 
   function rapAt(profile, time) {
@@ -122,11 +125,19 @@ const RoxolTradeValuations = (() => {
     const itemAssignment = profile && itemTime !== null && itemTime <= profile.checkedAt
       ? assignmentAt(profile.history, itemTime) : null;
     const comparison = itemAssignment ?? (itemTime === null ? assignment : null);
+    let historicalUnavailable = null;
+    if (!profile) historicalUnavailable = "profile-unavailable";
+    else if (!Number.isFinite(from) || !Number.isFinite(through) || through < from) historicalUnavailable = "invalid-observation-time";
+    else if (through > profile.checkedAt) historicalUnavailable = "observation-after-profile";
+    else if (!profile.history) historicalUnavailable = "incomplete-assigned-value-history";
+    else if (!assignment) historicalUnavailable = profile.history.changes.some(({ time }) => time > from && time <= through)
+      ? "assigned-value-changed-during-observation" : "observation-before-assigned-value-history";
+    else if (!historical) historicalUnavailable = tradeDateKnown
+      ? profile.rapHistoryUnavailable ?? "no-prior-rap-snapshot-on-trade-date" : "trade-observations-span-utc-dates";
+    else if (historical.value === 0) historicalUnavailable = "zero-rap-snapshot";
     return {
       ...item, assignment, historical, current, profileObservedAt: profile ? iso(profile.checkedAt) : null,
-      historicalUnavailable: historical ? null : !profile ? "profile-unavailable" : !assignment
-        ? "assigned-value-history-unresolved" : !tradeDateKnown
-          ? "trade-observations-span-utc-dates" : "no-prior-rap-snapshot-on-trade-date",
+      historicalUnavailable,
       valueThenComparison: valueThenComparison(item.valueThen, comparison),
       valueThenReference: comparison,
       rapAtItemObservation: rapAt(profile, itemTime),

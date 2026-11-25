@@ -41,9 +41,25 @@ test("historical swap distribution uses per-trade percentages and reports covera
   assert.deepEqual(stats.robuxCoverage, { unknown: 2, "reported-zero": 1, "reported-nonzero": 1 });
   assert.equal(stats.severeImbalances, 1);
   assert.equal(stats.withinTwofoldValue.medianOverpay, 0);
+  assert.equal(stats.marketRate.overpay.median, 0);
+  assert.equal(stats.marketRate.confidence, "insufficient");
   assert.equal(stats.recency.daysSinceLastPriced, 1);
   assert.equal(stats.thinSample, true);
   assert.equal(allObserved.sampleSize, 5);
+});
+
+test("standard confidence requires sample size, pricing coverage and a low severe-imbalance rate", () => {
+  const balanced = Array.from({ length: 30 }, (_, i) => trade(String(i), [item("101", 100)], [item("102", 200)]));
+  const missing = Array.from({ length: 8 }, (_, i) => trade("missing-" + i, [item("101", 100)], [item("102", null)]));
+  const severe = Array.from({ length: 4 }, (_, i) => trade("severe-" + i, [item("101", 100)], [item("102", 201)]));
+  const stats = (rows) => itemOverpay(rows, now).items["101"].groups.swap.recent;
+  assert.equal(stats(balanced).confidence, "standard");
+  assert.deepEqual(stats([...balanced, ...missing]).marketRate.confidenceReasons, ["pricing-coverage-below-80-percent"]);
+  const quality = stats([...balanced, ...severe]);
+  assert.equal(quality.confidence, "low");
+  assert.equal(quality.severeImbalances, 4);
+  assert.equal(quality.marketRate.sampleSize, 30);
+  assert.deepEqual(quality.marketRate.confidenceReasons, ["more-than-10-percent-severely-imbalanced"]);
 });
 
 test("one-for-many preserves copy count and shows both perspectives; bundled targets lack attributed OP", () => {
@@ -113,4 +129,19 @@ test("raw provider flag never establishes completed status or Robux", () => {
   ] });
   assert.equal(report.matched.get("a").status, "basket-match");
   assert.equal(report.matched.get("a").robux.sideA, null);
+});
+
+test("normalization retains duplicate and malformed inputs in the audit", () => {
+  const original = { trade_id: "a", side_a_items: [{ asset_id: 101 }], side_b_items: [{ asset_id: 102 }] };
+  const replacement = { ...original, inferred: true };
+  const missing = { trade_id: "b", side_a_items: [] };
+  const excluded = [];
+  const trades = normalizeTrades({ trades: [original, replacement, missing, null] }, excluded);
+  assert.equal(trades.length, 1);
+  assert.equal(trades[0].inferred, true);
+  assert.deepEqual(excluded, [
+    { index: 0, reason: "duplicate-trade", record: original },
+    { index: 2, reason: "missing-basket", record: missing },
+    { index: 3, reason: "invalid-source-record", record: null },
+  ]);
 });

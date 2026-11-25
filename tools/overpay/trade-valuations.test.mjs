@@ -53,7 +53,7 @@ test("leaves missing RAP dates, unknown quantities and ambiguous Value states un
   const [result] = resolveTrades(input, new Map([
     ["1", profile("1", null, changes)], ["2", profile("2", null, [], midnight - 60)], ["3", profile("3", null)],
   ]));
-  assert.equal(result.sideA[0].historicalUnavailable, "assigned-value-history-unresolved");
+  assert.equal(result.sideA[0].historicalUnavailable, "assigned-value-changed-during-observation");
   assert.equal(result.sideA[1].historicalUnavailable, "no-prior-rap-snapshot-on-trade-date");
   assert.equal(result.sideB[0].quantity, null);
   assert.equal(result.historicalItemOnlyOverpay.sideBTotal, null);

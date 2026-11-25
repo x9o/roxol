@@ -9,8 +9,13 @@
   const tradeProfileCache = new Map();
   const overpayCache = new Map();
   const overpayStorageKey = "overpay-samples-v1";
+  const profileLimitKey = "overpay-profile-request-window";
+  const profileCacheTTL = 6 * 60 * 60_000;
+  const profileRequestWindow = 60_000;
+  const profileRequestBudget = 24;
   let saveSamples = Promise.resolve();
-  let tradeProfilesRetryAt = 0;
+  let profileLimits;
+  let profileDatabase;
   const listingCache = new Map();
   const playerCache = new Map();
   const catalogUrl = "https://catalog.roblox.com/v1/catalog/items/details";
@@ -70,7 +75,8 @@
     cache.set(key, entry);
     if (cache.size > max) cache.delete(cache.keys().next().value);
     result.then((value) => {
-      entry.expires = Date.now() + (value?.status === "unavailable" || value == null ? failureTTL : ttl);
+      const lifetime = typeof ttl === "function" ? ttl(value) : ttl;
+      entry.expires = Date.now() + (value?.status === "unavailable" || value == null ? failureTTL : lifetime);
     }, () => {
       if (cache.get(key) === entry) cache.delete(key);
     });
@@ -267,13 +273,13 @@
 
   async function fetchTradeHistory(assetId, page, limit = tradePageSize) {
     const url = `https://routility.io/web/item-trades/${assetId}?kind=trade&range=all&limit=${limit}&page=${page}`;
-    const { data } = await request(url);
+    const { data, status } = await request(url);
     const pages = data?.total === 0 && data?.pages === 0 ? 1 : data?.pages;
     if (!Array.isArray(data?.trades) || amount(data.total) == null ||
         data.page !== page || !amount(pages) || data.page > pages ||
         data.per_page !== limit || data.trades.length > limit ||
         (page < pages && data.trades.length !== limit)) {
-      return { status: "unavailable" };
+      return { status: "unavailable", httpStatus: status };
     }
 
     const trades = new Map();
@@ -281,21 +287,24 @@
       const id = row?.kind === "trade" && typeof row.trade_id === "string" && row.trade_id.trim()
         ? row.trade_id : null;
       const firstObservedAt = observedAt(row?.ts);
-      const record = { id, firstObservedAt, trade: null };
-      if (!id) return record;
-      const sideA = tradeBasket(row.side_a_items);
-      const sideB = tradeBasket(row.side_b_items);
-      if (!sideA.length || !sideB.length || ![...sideA, ...sideB].some((item) => item.assetId === assetId)) return record;
-      record.trade = {
-        tradeId: id,
+      const sideA = tradeBasket(row?.side_a_items);
+      const sideB = tradeBasket(row?.side_b_items);
+      const trade = {
+        tradeId: typeof row?.trade_id === "string" ? row.trade_id : null,
         firstObservedAt,
-        lastObservedAt: observedAt(row.ts_latest),
-        inferred: typeof row.inferred === "boolean" ? row.inferred : null,
+        lastObservedAt: observedAt(row?.ts_latest),
+        inferred: typeof row?.inferred === "boolean" ? row.inferred : null,
         sideA,
         sideB,
       };
-      trades.set(id, record.trade);
-      return record;
+      const invalidReason = !id ? "invalid-source-record" : !sideA.length || !sideB.length ? "missing-basket" :
+        [...sideA, ...sideB].some((item) => item.assetId === assetId) ? null : "target-absent";
+      if (invalidReason) {
+        return { id, firstObservedAt, trade: null, invalidReason,
+          rejectedTrade: { ...trade, kind: typeof row?.kind === "string" ? row.kind : null } };
+      }
+      trades.set(id, trade);
+      return { id, firstObservedAt, trade };
     });
     return {
       status: "ok", page: data.page, pages, total: data.total,
@@ -310,30 +319,85 @@
       fetchTradeHistory(assetId, page), 60, 2 * 60_000);
   }
 
-  function readTradeProfile(assetId, through) {
-    const source = `https://www.rolimons.com/item/${assetId}`;
-    const existing = cached(tradeProfileCache, assetId);
-    if (existing) return existing.then((profile) => {
-      if (!profile || profile.checkedAt >= through) return profile;
-      const latest = cached(tradeProfileCache, assetId);
-      return latest && latest !== existing ? latest : fetchProfile();
+  function openProfileDatabase() {
+    return profileDatabase ??= new Promise((resolve, reject) => {
+      const open = indexedDB.open("roxol-trade-profiles", 1);
+      open.onupgradeneeded = () => open.result.createObjectStore("profiles");
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error);
+    }).catch((error) => {
+      profileDatabase = null;
+      throw error;
     });
-    return fetchProfile();
+  }
 
-    function fetchProfile() {
-      if (Date.now() < tradeProfilesRetryAt) return Promise.resolve(null);
-      return remember(tradeProfileCache, assetId,
-        request(source, {}, "text")
-          .then(({ status, data, retryAfter }) => {
-            const now = Date.now();
-            if (status === 429) {
-              const retryAt = /^\d+$/.test(retryAfter) ? now + Number(retryAfter) * 1000 : Date.parse(retryAfter);
-              tradeProfilesRetryAt = Math.max(tradeProfilesRetryAt, retryAt > now ? retryAt : now + 60_000);
-            }
-            return data && RoxolTradeValuations.parseItemProfile(data, assetId, source, now);
-          })
-          .catch(() => null), 1000, itemTTL);
+  async function localTradeProfile(assetId, profile) {
+    const database = await openProfileDatabase();
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction("profiles", profile ? "readwrite" : "readonly");
+      const profiles = transaction.objectStore("profiles");
+      const operation = profile ? profiles.put(profile, assetId) : profiles.get(assetId);
+      transaction.oncomplete = () => resolve(operation.result);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  }
+
+  function saveProfileLimits(limits) {
+    return chrome.storage.local.set({ [profileLimitKey]: limits }).catch(() => {});
+  }
+
+  async function fetchTradeProfile(assetId, through, previous) {
+    const stored = previous?.history ? previous : await localTradeProfile(assetId).catch(() => null);
+    if (stored?.checkedAt >= through) return { profile: stored };
+
+    const limits = await (profileLimits ??= chrome.storage.local.get(profileLimitKey)
+      .then((entries) => entries[profileLimitKey] ?? { starts: [], cooldown: 0 })
+      .catch(() => ({ starts: [], cooldown: 0 })));
+    const now = Date.now();
+    const fail = (reason, httpStatus = null, retryAt = null, details = {}) => ({
+      profile: stored ?? null, failure: { reason, httpStatus, ...details }, retryAt,
+    });
+    if (limits.cooldown > now) {
+      return fail("deferred-provider-cooldown", null, limits.cooldown, { triggerHttpStatus: 429 });
     }
+    limits.starts = limits.starts.filter((start) => start > now - profileRequestWindow);
+    if (limits.starts.length >= profileRequestBudget) {
+      return fail("deferred-local-request-budget", null, limits.starts[0] + profileRequestWindow);
+    }
+    limits.starts.push(now);
+    const committed = saveProfileLimits(limits);
+    const source = `https://www.rolimons.com/item/${assetId}`;
+    try {
+      const { status, data, retryAfter } = await request(source, {}, "text");
+      if (status === 429) {
+        const receivedAt = Date.now();
+        const retryAt = /^\d+$/.test(retryAfter) ? receivedAt + Number(retryAfter) * 1000 : Date.parse(retryAfter);
+        limits.cooldown = Math.max(limits.cooldown, retryAt > receivedAt ? retryAt : receivedAt + profileRequestWindow);
+        await saveProfileLimits(limits);
+        return fail("profile-http-error", status, limits.cooldown);
+      }
+      if (data === null) return fail("profile-http-error", status);
+      const profile = RoxolTradeValuations.parseItemProfile(data, assetId, source, Date.now());
+      if (!profile) return fail("profile-unrecognized", status);
+      if (!profile.history) return { ...fail("incomplete-assigned-value-history", status), profile: stored ?? profile };
+      await localTradeProfile(assetId, profile).catch(() => {});
+      return { profile };
+    } catch (error) {
+      const reason = error.name === "TimeoutError" ? "profile-timeout" : "profile-request-error";
+      return fail(reason, null, null, { message: error.message });
+    } finally {
+      await committed;
+    }
+  }
+
+  async function readTradeProfile(assetId, through) {
+    const existing = cached(tradeProfileCache, assetId);
+    const previous = await existing;
+    if (previous?.failure || previous?.profile?.checkedAt >= through) return previous;
+    const latest = cached(tradeProfileCache, assetId);
+    if (latest && latest !== existing) return latest;
+    return remember(tradeProfileCache, assetId, fetchTradeProfile(assetId, through, previous?.profile), 1000,
+      ({ failure, retryAt }) => retryAt ? Math.max(0, retryAt - Date.now()) : failure ? itemTTL : profileCacheTTL);
   }
 
   async function fetchOverpay(assetId) {
@@ -399,7 +463,8 @@
         return { status: "unavailable" };
       }
       return cached(overpayCache, route.id) || remember(overpayCache, route.id,
-        fetchOverpay(route.id).catch(() => ({ status: "unavailable" })), 60, 2 * 60_000);
+        fetchOverpay(route.id).catch(() => ({ status: "unavailable" })), 60, ({ pricingRetryAt }) =>
+          pricingRetryAt ? Math.max(0, Math.min(2 * 60_000, pricingRetryAt - Date.now())) : 2 * 60_000);
     },
     "roxol:market-best-listing"(message) {
       const item = targetOf(message.item?.kind, message.item?.id);

@@ -18,6 +18,8 @@ const RoxolItemOverpay = (() => {
   const recentDays = 30;
   const thinBelow = 10;
   const lowConfidenceBelow = 30;
+  const standardPricingCoverage = 0.8;
+  const standardBalanceRate = 0.9;
   const imbalanceRatio = 2;
   const groups = ["swap", "upgrade", "downgrade"];
 
@@ -33,15 +35,36 @@ const RoxolItemOverpay = (() => {
     const times = samples.map(({ time }) => new Date(time).toISOString()).sort();
     const pricedTimes = priced.map(({ time }) => new Date(time).toISOString()).sort();
     const balanced = priced.filter(({ imbalanced }) => !imbalanced);
+    const fractionPriced = samples.length ? priced.length / samples.length : null;
+    const balanceRate = priced.length ? balanced.length / priced.length : null;
+    const confidenceReasons = [];
+    if (balanced.length < thinBelow) confidenceReasons.push("fewer-than-10-balanced-trades");
+    else if (balanced.length < lowConfidenceBelow) confidenceReasons.push("fewer-than-30-balanced-trades");
+    if (fractionPriced < standardPricingCoverage && fractionPriced !== null) confidenceReasons.push("pricing-coverage-below-80-percent");
+    if (balanceRate < standardBalanceRate && balanceRate !== null) confidenceReasons.push("more-than-10-percent-severely-imbalanced");
+    const confidence = balanced.length < thinBelow ? "insufficient" : confidenceReasons.length ? "low" : "standard";
+    const marketRate = {
+      sampleSize: balanced.length,
+      confidence,
+      confidenceReasons,
+      overpay: distribution(balanced.map(({ overpay }) => overpay)),
+      overpayPercent: distribution(balanced.map(({ percent }) => percent)),
+    };
+    const severeImbalances = priced.length - balanced.length;
+    const unpricedReasons = {};
+    for (const { pricingFailures = [] } of samples) {
+      for (const reason of new Set(pricingFailures.map(({ reason }) => reason))) {
+        unpricedReasons[reason] = (unpricedReasons[reason] ?? 0) + 1;
+      }
+    }
     return {
       sampleSize: priced.length,
       thinSample: priced.length < thinBelow,
-      confidence: priced.length < thinBelow ? "insufficient" :
-        priced.length < lowConfidenceBelow ? "low" : "standard",
+      confidence,
       valuationCoverage: {
         eligibleTrades: samples.length,
         pricedTrades: priced.length,
-        fractionPriced: samples.length ? priced.length / samples.length : null,
+        fractionPriced,
         assignedValueOnly: priced.filter(({ basis }) => basis === "assigned-value").length,
         usesRap: priced.filter(({ basis }) => basis === "rap").length,
       },
@@ -56,11 +79,13 @@ const RoxolItemOverpay = (() => {
       },
       overpay: distribution(priced.map(({ overpay }) => overpay)),
       overpayPercent: distribution(priced.map(({ percent }) => percent)),
-      severeImbalances: priced.length - balanced.length,
+      severeImbalances,
+      unpricedReasons,
+      marketRate,
       withinTwofoldValue: {
         sampleSize: balanced.length,
-        medianOverpay: distribution(balanced.map(({ overpay }) => overpay)).median,
-        medianOverpayPercent: distribution(balanced.map(({ percent }) => percent)).median,
+        medianOverpay: marketRate.overpay.median,
+        medianOverpayPercent: marketRate.overpayPercent.median,
       },
     };
   }
@@ -80,6 +105,10 @@ const RoxolItemOverpay = (() => {
     return null;
   }
 
+  function severelyImbalanced(sideA, sideB) {
+    return sideA > 0 && sideB > 0 && Math.max(sideA, sideB) / Math.min(sideA, sideB) > imbalanceRatio;
+  }
+
   function targetSample(trade, side, time) {
     const totals = trade.historicalItemOnlyOverpay;
     const [target, opposite] = side === 0 ? [totals.sideATotal, totals.sideBTotal] : [totals.sideBTotal, totals.sideATotal];
@@ -88,11 +117,15 @@ const RoxolItemOverpay = (() => {
     const priced = target > 0 && opposite > 0 && items.every(({ historical }) => historical?.value > 0);
     const overpay = priced ? opposite - target : null;
     const robux = [trade.robux?.sideA, trade.robux?.sideB];
+    const pricingFailures = priced ? [] : items.filter(({ historical }) => !(historical?.value > 0))
+      .map(({ assetId, historicalUnavailable }) => ({ assetId, reason: historicalUnavailable ?? "missing-historical-value" }));
+    if (!priced && !pricingFailures.length) pricingFailures.push({ reason: "invalid-basket-total" });
     return {
       time, overpay,
       percent: priced ? overpay / target * 100 : null,
       basis: items.every(({ historical }) => historical?.method === "assigned-value") ? "assigned-value" : "rap",
-      imbalanced: priced && Math.max(opposite, target) / Math.min(opposite, target) > imbalanceRatio,
+      imbalanced: priced && severelyImbalanced(target, opposite),
+      pricingFailures,
       robux: robux.some((amount) => amount > 0) ? "reported-nonzero" :
         robux.every((amount) => amount === 0) ? "reported-zero" : "unknown",
     };
@@ -112,12 +145,13 @@ const RoxolItemOverpay = (() => {
 
   function itemPreview(records, id, now) {
     const samples = { swap: [], downgrade: [] };
-    for (const { trade, sample } of records) {
+    for (const { id: tradeId, trade, sample } of records) {
       const sides = [trade.sideA, trade.sideB];
       const side = isolatedSide(sides, id);
       const opposite = sides[1 - side];
       samples[tradeGroup(opposite)].push({
         ...sample,
+        tradeId,
         observedAt: new Date(sample.time).toISOString(),
         inferred: trade.inferred,
         opposite: opposite.map(({ assetId, name, quantity }) => ({ assetId, name, quantity })),
@@ -179,7 +213,7 @@ const RoxolItemOverpay = (() => {
   }
 
   return { assetCopies, percentile, itemOverpay, itemPreview, previewSample, isolatedSide,
-    unusualComposition, tradeGroup, recentDays };
+    unusualComposition, tradeGroup, severelyImbalanced, recentDays };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = RoxolItemOverpay;
