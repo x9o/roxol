@@ -1,6 +1,6 @@
 # Market data acquisition plan
 
-Add an asset-level export for limited-item pricing, liquidity, supply, and trading activity. Reuse Roxol’s resale history and local proof pipeline. Track the source, observation time, and coverage for each metric so historical comparisons and overpay analysis can be reproduced. [Existing overpay analytics plan](OVERPAY_ANALYTICS_PLAN.md)
+Start the LLM context export with individual item trades and historical valuations. Add pricing, liquidity, supply, and trading activity around those records. Track the source, observation time, and coverage for each metric so historical comparisons and overpay analysis can be reproduced. Proof lookup and screenshots can ship independently. [Existing overpay analytics plan](OVERPAY_ANALYTICS_PLAN.md)
 
 ## 1. Resale listing depth
 
@@ -34,34 +34,40 @@ Verify the live response and sampling window for `GET https://api.rolimons.com/t
 
 Deduplicate by ad ID and export per-item offer count, explicit request count, request-to-offer ratio, unique advertiser count, and the requested-versus-offered Value difference for ads with fully priceable baskets. Include the observation window and sample size. Leave the ratio empty when there are zero offers. Confirm access for recurring historical collection before scheduling it. [Rolimon’s trade ads](https://www.rolimons.com/tradeads)
 
-## 5. Completed trades and overpay evidence
+## 5. Individual trade records and validation
 
 | Dataset | Acquisition and interpretation |
 | --- | --- |
-| Authenticated completed trades | Use Roblox’s Trades API for consenting users’ own completed trades. Page through the list and fetch trade details as needed. Keep authentication in the user session and identify these exports as personal trade history. [Roblox Trades API](https://create.roblox.com/docs/cloud/reference/domains/trades) |
-| Submitted overpay proofs | Reuse the local Discord collector and reviewer. Preserve evidence references, completion checks, submitted totals, and the existing eligibility rules. Use complete historical Values for a separate recalculation. [Local collector guide](tools/overpay/README.md) |
-| Inferred exchanges from RoUtility | Evaluate read-only data access with RoUtility’s developers. The public tracker shows item baskets, Value, and RAP. The research notes reported 2,415 trades in one indexed 24-hour snapshot. Bulk access remains unresolved, and accompanying Robux or USD payments are unobservable. [RoUtility tracker](https://routility.io/tracker) |
-| Inferred exchanges from RoPost | Evaluate read-only data access with RoPost’s developers. Its documented method groups ownership transfers between the same players at matching timestamps and checks inventories for incomplete transfers. Confirm available fields, coverage, and access before building an importer. [RoPost repository](https://github.com/sephh23/RoPost) |
+| Authenticated completed trades | Use Roblox’s Trades API for consenting users’ own completed trades. A clean Edge profile received HTTP 401 from the listing endpoint. Page through the list and fetch trade details in a signed-in session to establish the reference sample. [Roblox Trades API](https://create.roblox.com/docs/cloud/reference/domains/trades) |
+| Inferred exchanges from RoUtility | Visible Edge fetched two pages of 20 distinct Black Iron Antlers records while signed out. RoUtility reported 4,736 records in that snapshot. The global tracker also made a successful `/web/moves/recent` JSON request. Verify requests from Roxol’s background worker before relying on the website endpoint. [Black Iron Antlers trade history](https://routility.io/catalog/398674411/trades) |
+| Inferred exchanges from Void | Nevos identifies Void `itemtrades` as the upstream source for its asset history. No public API documentation was located. Verify whether `/itemtrades` offers exportable records or a formatted Discord reply. [Void](https://discord.com/servers/void-market-analysis-tools-1463051876860825734) |
+| Inferred exchanges from RoPost | Its documented method groups ownership transfers between the same players at matching timestamps and checks inventories for incomplete transfers. Its item lookup produces trade cards. A machine-readable export remains unverified. [RoPost repository](https://github.com/sephh23/RoPost) |
 
 ```text
+GET https://routility.io/web/item-trades/{assetId}?range=all&limit=20&page=1
 GET https://trades.roblox.com/v1/trades/Completed
 GET https://trades.roblox.com/v2/trades/{tradeId}
 ```
 
-Record source IDs, timestamps, both item baskets, and any observed Robux with their basis. Preserve unknown payments as missing. Keep authenticated trades, submitted proofs, and inferred exchanges in separate datasets and publish separate overpay samples with their own coverage. Label figures derived from inferred exchanges as item-only estimates. Seek a partner feed before investing in a market-wide ownership tracker.
+The observed RoUtility response includes `trades`, `page`, `pages`, and totals. Trade records include `trade_id`, `ts`, `ts_latest`, `kind`, `inferred`, and `side_a_items` and `side_b_items`. The sampled basket items contain `asset_id`, copy identifiers, `rap`, and `value_then`. Only seven of the first 40 records had a positive `value_then` for every item, so historical valuation coverage needs its own check and fallback. Confirm timestamp units and the meaning of `value_then`. Keep the provider’s observation time distinct from any verified completion time. RoUtility’s tracker cannot observe accompanying Robux or USD. [RoUtility tracker](https://routility.io/tracker)
+
+Use an opt-in, signed-in Roblox sample as the reference dataset. Match RoUtility records against completed Roblox trades by both baskets, copy IDs when available, and a documented time window. Report how many trades matched, basket and timestamp discrepancies, and how much recorded Robux changes the estimated OP. Preserve unknown payments as missing. Keep participant identifiers local to matching and leave them out of the LLM export.
+
+## Proof lookup
+
+Evaluate this as a separate feature after trade records can flow into the export. RoPost documents item-specific `/proof` lookups and screenshot processing. Public documentation does not establish export functionality. Nevos has proof-search and image routes, but an unauthenticated proof-search test returned a placeholder. Preserve post IDs, original text, timestamps, and evidence links when a source provides them. [RoPost proof lookup](https://github.com/sephh23/RoPost#value-proofs) · [Existing collector guide](tools/overpay/README.md)
 
 ## Export and verification
 
 - Include the asset ID, collectible item ID where relevant, source, collection timestamp, effective date or sample window, and available coverage. Preserve missing data separately from observed zeroes. Cache successful fetches, retain the last observation timestamp on transient failures, and make repeated imports idempotent.
+- Export individual trades alongside any summary. Start with complete two-sided exchanges, deduplicate by source trade ID, and price both baskets using historical Value or historical RAP where supported. For isolated target items, group one-for-one and one-for-many trades by direction and report median item-only OP, middle 50%, sample size, and date window. Record historical and current-equivalent OP separately and include reported OP when a proof provides it. Keep unpriceable records visible and report their count.
 - Validate legacy and migrated assets, listings with additional pages, empty listing sets, same-day Value changes, incomplete history, and ads with generic requests. Spot-check live data against the source and record which cases used fixtures. If the export adds an extension UI, verify its desktop and narrow layouts using the repository’s Edge CDP workflow. [Repository verification guide](AGENTS.md)
 - Confirm collection and reuse arrangements for Rolimon’s HTML pages and recurring trade-ad history. Review how those arrangements apply to existing Roxol integrations as part of implementation. Keep these sources in the acquisition plan while access is confirmed. [Rolimon’s published terms](https://www.rolimons.com/termsandprivacy)
 
 ## Implementation order
 
-1. Ship Roblox reseller depth using the existing market worker.
-2. Add historical assigned Value through an authorized source and join it with existing RAP and resale series.
-3. Add supply statistics and valuation methodology.
-4. Verify recent trade ads and add demand metrics.
-5. Evaluate RoUtility and RoPost feeds for inferred market-wide coverage. Scope authenticated personal trade import independently of partner availability.
-
-Market-wide completed trade coverage is the main unresolved data dependency. The personal Roblox API covers the consenting account, and the two candidate market-wide sources provide inferred exchanges. Live trade-ad responses and source access for recurring collection also need confirmation.
+1. Verify RoUtility background-worker access and coverage across items, then normalize its trade records for the LLM export.
+2. Collect the opt-in Roblox reference sample and validate basket matching, timestamps, and item-only OP against it.
+3. Join historical Value and RAP to the trade records and publish coverage and item-only OP summaries.
+4. Add resale listing depth, supply and valuation methodology, and verified trade advertisement metrics.
+5. Evaluate Void and RoPost as alternate feeds and pursue item proof lookup independently.
