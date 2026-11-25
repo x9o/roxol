@@ -6,10 +6,14 @@ import { setTimeout as delay } from "node:timers/promises";
 import { browserTargets, connect, launchEdge, waitFor } from "./edge.mjs";
 import { readJson, saveJson } from "./store.mjs";
 import { coverage, normalizeTrades, parseItemProfile, resolveTrades } from "./trade-valuations.mjs";
+import { validateTrades } from "./trade-validation.mjs";
+import { itemOverpay } from "./item-overpay.mjs";
 
-const [input, output] = process.argv.slice(2);
-if (!input || !output || path.resolve(input).toLowerCase() === path.resolve(output).toLowerCase()) {
-  throw new Error("Usage: node tools/overpay/resolve-trades.mjs <RoUtility or Roxol trades.json> <report.json>");
+const [input, output, flag, completed, ...extra] = process.argv.slice(2);
+const sameFile = (left, right) => path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase();
+if (!input || !output || sameFile(input, output) || extra.length ||
+    (flag !== undefined && (flag !== "--completed" || !completed || sameFile(completed, output)))) {
+  throw new Error("Usage: node tools/overpay/resolve-trades.mjs <trades.json> <report.json> [--completed <pilot.json>]");
 }
 
 const cacheDir = process.env.ROXOL_TRADE_VALUATION_CACHE ??
@@ -17,6 +21,7 @@ const cacheDir = process.env.ROXOL_TRADE_VALUATION_CACHE ??
 const cacheAge = 6 * 60 * 60 * 1000;
 const source = await readJson(input);
 const trades = normalizeTrades(source);
+const validation = completed ? validateTrades(trades, await readJson(completed)) : null;
 const needed = new Map();
 for (const trade of trades) {
   const times = [trade.firstObservedAt, trade.lastObservedAt].map(Date.parse).filter(Number.isFinite);
@@ -101,19 +106,25 @@ try {
   browser?.kill();
 }
 
-const resolved = resolveTrades(trades, profiles);
+const resolved = resolveTrades(trades, profiles).map((trade) => {
+  const proof = validation?.matched.get(trade.tradeId);
+  return proof?.status === "copy-corroborated" ? { ...trade, robux: proof.robux } : trade;
+});
 const summary = coverage(resolved);
+const generatedAt = Date.now();
 await saveJson(output, {
   source: "RoUtility",
   sourceUrl: source.sourceUrl ?? null,
   assetId: source.assetId ?? null,
   pages: source.pages ?? null,
   inputRecords: source.trades.length,
-  generatedAt: new Date().toISOString(),
+  generatedAt: new Date(generatedAt).toISOString(),
   overpayPerspective: "Side A receiving side B",
   coverage: summary,
   requests,
   profileErrors,
+  validation: validation ? { summary: validation.summary, proofs: validation.proofs } : null,
+  itemOverpay: itemOverpay(resolved, generatedAt),
   trades: resolved,
 });
 console.log(JSON.stringify({ coverage: summary, requests, profileErrors }, null, 2));

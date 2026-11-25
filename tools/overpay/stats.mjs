@@ -59,7 +59,7 @@ export function deduplicate(trades) {
   return [...groups].map(({ trade, links, conflict }) => ({ ...trade, links: [...links], conflict }));
 }
 
-function percentile(sorted, fraction) {
+export function percentile(sorted, fraction) {
   const index = (sorted.length - 1) * fraction;
   const lower = Math.floor(index);
   return sorted[lower] + (sorted[Math.ceil(index)] - sorted[lower]) * (index - lower);

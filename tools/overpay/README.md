@@ -37,6 +37,43 @@ All 172 rows had RoUtility RAP. At each copy's observation time, the latest prec
 
 Headless Edge checks used the live Black Iron Antlers page and RoUtility feed at 1,440 px and 375 px. The fixture run used the same widths and verified that the trade viewer displays a quantity of two and exports it alongside distinct zero and missing Value fields.
 
+## Historical overpay statistics
+
+```powershell
+node tools/overpay/resolve-trades.mjs trades.json valued-trades.json
+node tools/overpay/resolve-trades.mjs trades.json valued-trades.json --completed pilot.json
+node tools/overpay/validate-trades.mjs trades.json pilot.json audit.json
+node tools/overpay/item-overpay.test.mjs
+```
+
+Open `itemOverpay.items[assetId]` in the valuation report. Each group's `recent` window covers the last 30 days and `allObserved` covers observations supplied in the input. Exported pages determine how much of each window is represented.
+
+- OP is historical item value received minus historical item value given. Percentage OP divides each trade's difference by the focal item's historical value before calculating the distribution. For a swap, the perspective gives the focal item. For an upgrade, it receives the focal item alone. For a downgrade, it gives the focal item alone. One-for-many trades contribute once to each perspective for the isolated item, so their signs mirror each other and their counts describe the same trades.
+- Each window reports the median, the 25th and 75th percentiles using linear interpolation, and their difference (IQR) for both OP and percentage OP. Empty groups return null statistics. Groups with fewer than ten fully priced trades are labeled thin. Recency includes the first and last eligible observation, the latest priced observation, and its age in days.
+- Valuation coverage is fully priced trades divided by eligible trades for that item and group, with counts for assigned Value alone and for baskets using RAP. Every copy needs a positive historical valuation. Invalid quantities, duplicate copy IDs, the same asset on both sides, many-for-many trades, bundled targets, and unusable observation times are tallied as exclusions. Distinct copies of the same asset can appear together on one side and each contributes its quantity to the total. The report includes all priced trades and shows how the median changes when removing trades where one basket is worth more than twice the other. Copy-specific premiums are outside the item valuation.
+- The calculations use item values for all samples. Robux coverage counts priced samples with unknown, proof-reported zero, and proof-reported nonzero Robux. The resolver carries over amounts only from copy-corroborated proofs and records the fee basis when documented. These amounts stay out of the item-only OP calculations.
+
+### Completed-trade audit
+
+Use `pilot.json` from the local proof analyzer after reviewing completed trades and their attachments. The audit compares both baskets as unordered sets of copies with quantities, allowing either side order. A matching serial for the same asset, user asset ID, or instance ID provides copy corroboration. A conflicting comparable identifier rules out that candidate. A unique composition and date match without matching identifiers is reported as a basket match. Tied candidates and candidates shared by multiple proofs remain ambiguous.
+
+The audit allows RoUtility observations up to 48 hours after the possible completion time, with five minutes of clock tolerance before completion. A date-only screenshot of unknown time zone uses the applicable range of UTC offsets. The output preserves RoUtility's `inferred` flag and compares outcomes by flag. These are proof-to-feed recovery counts for the pages sampled. A missing match can reflect coverage, and feed records without a proof have unknown completion status. The Roblox completed list returned HTTP 401 in a signed-out request. Roblox documents it as an authenticated account endpoint. [Roblox Trades API](https://create.roblox.com/docs/cloud/reference/features/trades)
+
+On November 25, 2026, 635 distinct live RoUtility records across 11 asset histories were compared with 11 previously reviewed completed-trade proofs. Two serial transcriptions were corrected by rereading the screenshots. Six proofs had copy corroboration, one matched both baskets without copy corroboration, one matched two indistinguishable candidates, and three had no match in the sampled pages. Three copy-corroborated proofs showed nonzero Robux, including one explicitly labeled after the 30% fee. Every audited feed record had `inferred: false`, so the audit establishes no accuracy estimate for records explicitly marked `inferred: true`.
+
+### Live statistics check
+
+The November 25 run used 47 distinct live RoUtility records sampled from four asset histories and fetched Rolimon's histories with headless Edge. Both baskets resolved in 46 records. The table reports priced observations over eligible observations from the export. Upgrade and downgrade columns have the same counts because they describe the same one-for-many exchanges.
+
+| Item | Rolimon's demand and rarity | Swaps | Upgrades | Downgrades |
+| --- | --- | ---: | ---: | ---: |
+| Perfectly Legitimate Business Hat | Amazing | 4 / 4 | 0 / 0 | 0 / 0 |
+| Black Iron Antlers | High | 1 / 1 | 2 / 2 | 2 / 2 |
+| The Agonizingly Ugly Bucket of Doom | Low | 2 / 2 | 3 / 4 | 3 / 4 |
+| Crimsonwrath, Duke of Danger | Terrible, rare | 1 / 1 | 5 / 5 | 5 / 5 |
+
+All groups were thin. Fixture tests checked the numeric distributions, missing and stale observations, zero and unknown Robux, multi-copy baskets, exclusions, and ambiguous proof matches.
+
 ## Discord proof collector
 
 Use Node.js 22 or later and Microsoft Edge on Windows. Run these commands from the repository root.
