@@ -33,6 +33,10 @@ The limited-card **Copy ID** control is disabled while its implementation is kep
 
 Roxol reuses item and resale helpers from Nevos. [Nevos source license](extension/vendor/nevos/LICENSE)
 
+## Contributing
+
+After each implementation, update the relevant README files and include those updates in the same commit. Summarize what changed in the commit subject and explain why in the commit body. Push to the corresponding GitHub branch and verify that its tip matches the local commit.
+
 ## Local overpay pilot
 
 Roxol can compare observed submitted-proof overpay for isolated limited items. The pilot uses the Rolimon's Discord proof channel and Rolimon's historical assigned values. An independent cross-check with RoPost's Proof Checker is pending.

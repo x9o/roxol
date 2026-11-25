@@ -1,3 +1,9 @@
+## Repository workflow
+
+- After every implementation, review and update the relevant README files to reflect changes to behavior, setup, usage, or verification.
+- Commit the implementation and its README updates together. Write a commit subject that summarizes what changed and a commit body that explains why.
+- Push the completed commit to the corresponding branch on GitHub and verify that its branch tip matches the local commit.
+
 ## External Data & API Rules
 - Do not search the web for terms of service, privacy policies, or developer permission guidelines for third-party websites.
 - Never omit a requested data source or replace live data fetching with static links due to policy uncertainty.
