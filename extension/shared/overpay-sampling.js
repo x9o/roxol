@@ -1,26 +1,29 @@
 const RoxolOverpaySampling = (() => {
   const pageSize = 50;
   const rawCap = 500;
-  const target = 100;
 
-  async function sampleItem({ assetId, previous, readPage, readTradeProfile, now = Date.now() }) {
+  async function sampleItem({ assetId, previous, readPage, readTradeProfile, readStoredProfile,
+    onProgress = () => {}, isActive = () => true, clock = Date.now, now = clock() }) {
     const { itemPreview, previewSample, isolatedSide, unusualComposition, tradeGroup, recentDays } = RoxolItemOverpay;
     const cutoff = now - recentDays * 86_400_000;
     const records = [];
     const eligible = [];
     const seen = new Set();
-    const counts = { swap: 0, downgrade: 0 };
     const exclusions = {};
+    const needed = new Map();
+    const groupSizes = { swap: 0, downgrade: 0 };
+    const lookups = new Map();
+    const profiles = new Map();
     let pricingRetryAt = null;
+    let retryReason = null;
+    let reason;
+    let historyFailure;
     const previousById = new Map();
     for (const [index, { id }] of previous.entries()) {
       if (id && !previousById.has(id)) previousById.set(id, index);
     }
-    let reason;
 
-    async function consume(rows) {
-      const pending = [];
-      const batch = [];
+    function consume(rows) {
       for (const incoming of rows) {
         if (records.length === rawCap) break;
         const { id, trade, firstObservedAt } = incoming;
@@ -30,8 +33,7 @@ const RoxolOverpaySampling = (() => {
         records.push(row);
         delete row.exclusion;
         // RoUtility pages in decreasing order of its first observation timestamp.
-        const first = Date.parse(firstObservedAt);
-        if (first <= cutoff) reason = "date";
+        if (Date.parse(firstObservedAt) <= cutoff) reason = "date";
         if (reason === "date") row.exclusion = "outside-window";
         else if (!trade) row.exclusion = row.invalidReason ?? "invalid-source-record";
         else if (seen.has(id)) row.exclusion = "duplicate-trade";
@@ -44,55 +46,23 @@ const RoxolOverpaySampling = (() => {
             from <= cutoff ? "outside-window" : unusualComposition(sides) ??
             (isolated < 0 ? "target-bundled" : null);
           if (!row.exclusion) {
-            batch.push({ row, group: tradeGroup(sides[1 - isolated]) });
-            if (row.sample?.overpay == null) pending.push({ row, from, through });
+            eligible.push(row);
+            const group = tradeGroup(sides[1 - isolated]);
+            groupSizes[group]++;
+            if (row.sample?.overpay == null) {
+              const candidate = { row, from, group };
+              const ids = new Set(sides.flat().map(({ assetId: id }) => id));
+              for (const id of ids) {
+                const need = needed.get(id) ?? { through: 0, candidates: [] };
+                need.through = Math.max(through, need.through);
+                need.candidates.push(candidate);
+                needed.set(id, need);
+              }
+            }
           }
         }
         if (row.exclusion) exclusions[row.exclusion] = (exclusions[row.exclusion] ?? 0) + 1;
       }
-
-      if (pending.length) {
-        const needed = new Map();
-        for (const { row, through } of pending) {
-          const ids = new Set([...row.trade.sideA, ...row.trade.sideB].map(({ assetId: id }) => id));
-          for (const id of ids) {
-            const prior = needed.get(id);
-            needed.set(id, { through: Math.max(through, prior?.through ?? 0), uses: (prior?.uses ?? 0) + 1 });
-          }
-        }
-        const lookups = new Map([[assetId, await readTradeProfile(assetId, needed.get(assetId).through)]]);
-        needed.delete(assetId);
-        if (lookups.get(assetId).profile?.history) {
-          const queue = [...needed.entries()].sort((a, b) => b[1].uses - a[1].uses).values();
-          // Keep the shared market request queue available for other panels and tabs.
-          await Promise.all(Array.from({ length: Math.min(8, needed.size) }, async () => {
-            for (const [id, { through }] of queue) lookups.set(id, await readTradeProfile(id, through));
-          }));
-        }
-        const profiles = new Map([...lookups].map(([id, { profile }]) => [id, profile]));
-        const valued = RoxolTradeValuations.resolveTrades(pending.map(({ row }) => row.trade), profiles);
-        pending.forEach(({ row, from }, index) => {
-          row.sample = previewSample(valued[index], assetId, from);
-          row.sample.pricingFailures = row.sample.pricingFailures.map((failure) => {
-            if (!failure.assetId) return failure;
-            const lookup = lookups.get(failure.assetId);
-            if (!lookup) return { ...failure, reason: "deferred-focal-profile-unavailable" };
-            if (lookup.failure && (!lookup.profile || failure.reason === "observation-after-profile")) {
-              if (lookup.retryAt) pricingRetryAt = Math.min(pricingRetryAt ?? Infinity, lookup.retryAt);
-              return { ...failure, ...lookup.failure };
-            }
-            return { ...failure, httpStatus: lookup.profile ? 200 : null };
-          });
-          row.pricingIncomplete = row.sample.pricingFailures.some(({ reason }) =>
-            reason.startsWith("profile-") || reason.startsWith("deferred-"));
-        });
-      }
-
-      for (const { row, group } of batch) {
-        eligible.push(row);
-        if (row.sample.overpay !== null && !row.sample.imbalanced) counts[group]++;
-      }
-      if (!reason && counts.swap >= target && counts.downgrade >= target) reason = "target";
       if (!reason && records.length === rawCap) reason = "cap";
     }
 
@@ -103,21 +73,13 @@ const RoxolOverpaySampling = (() => {
       const skip = offset % pageSize;
       const history = await readPage(page, pageSize).catch((error) => ({ message: error.message }));
       if (history?.status !== "ok") {
-        const historyFailure = { page, httpStatus: history?.httpStatus ?? null, message: history?.message ?? null };
+        historyFailure = { page, httpStatus: history?.httpStatus ?? null, message: history?.message ?? null };
         if (!offset && !previous.length) return { status: "unavailable", historyFailure };
-        if (!offset) {
-          for (let index = 0; index < previous.length && !reason; index += pageSize) {
-            await consume(previous.slice(index, index + pageSize));
-          }
-        }
-        return result({
-          partial: true,
-          historyFailure,
-          ...(offset && (reusedTail || records.length >= previous.length) ? { records } : {}),
-        });
+        if (!offset) consume(previous);
+        break;
       }
       const rows = history.records.slice(skip);
-      await consume(rows);
+      consume(rows);
       offset += rows.length;
       if (reason) break;
 
@@ -131,9 +93,7 @@ const RoxolOverpaySampling = (() => {
         if (seam >= 0) {
           const tail = previousById.get(rows[seam].id) + rows.length - seam;
           const remaining = Math.min(previous.length - tail, Math.max(0, history.total - offset));
-          for (let index = 0; index < remaining && !reason; index += pageSize) {
-            await consume(previous.slice(tail + index, tail + Math.min(remaining, index + pageSize)));
-          }
+          consume(previous.slice(tail, tail + remaining));
           offset += remaining;
           reusedTail = true;
         }
@@ -141,19 +101,105 @@ const RoxolOverpaySampling = (() => {
       if (!reason && (page >= history.pages || offset >= history.total)) reason = "end";
     }
 
-    return result({ reason: reason ?? "cap", records });
+    function valueCandidates(candidates) {
+      const pending = candidates.filter(({ row }) => row.sample?.overpay == null);
+      const valued = RoxolTradeValuations.resolveTrades(pending.map(({ row }) => row.trade), profiles);
+      pending.forEach(({ row, from }, index) => {
+        row.sample = previewSample(valued[index], assetId, from);
+        row.sample.pricingFailures = row.sample.pricingFailures.map((failure) => {
+          if (!failure.assetId) return failure;
+          const lookup = lookups.get(failure.assetId);
+          if (!lookup) return { ...failure, reason: "deferred-profile-lookup", pending: true };
+          if (lookup.refresh && failure.reason === "observation-after-profile") {
+            return { ...failure, pending: true };
+          }
+          if (lookup.failure && (!lookup.profile?.history || failure.reason === "observation-after-profile")) {
+            return { ...failure, ...lookup.failure, ...(lookup.retryAt ? { pending: true } : {}) };
+          }
+          return { ...failure, httpStatus: lookup.profile ? 200 : null };
+        });
+      });
+    }
 
-    function result(coverage) {
+    function accept(id, lookup) {
+      lookups.set(id, lookup);
+      if (lookup.profile) profiles.set(id, lookup.profile);
+      if (lookup.retryAt && (pricingRetryAt === null || lookup.retryAt < pricingRetryAt)) {
+        pricingRetryAt = lookup.retryAt;
+        retryReason = lookup.failure?.reason;
+      }
+    }
+
+    function result(pricingActive = false) {
+      const groups = itemPreview(eligible, assetId, now);
+      for (const { summary, history } of Object.values(groups)) {
+        const { valuationCoverage } = summary;
+        valuationCoverage.pendingTrades = history.filter(({ pricingFailures }) =>
+          pricingFailures.length && pricingFailures.every(({ pending }) => pending)).length;
+        valuationCoverage.unavailableTrades = valuationCoverage.eligibleTrades -
+          valuationCoverage.pricedTrades - valuationCoverage.pendingTrades;
+      }
+      const canPriceMore = Object.values(groups).some(({ summary }) => summary.valuationCoverage.pendingTrades);
       const audit = records.map(({ id, firstObservedAt, trade, rejectedTrade, exclusion, sample }) => ({
         id, firstObservedAt, trade: trade ?? rejectedTrade ?? null, exclusion, ...(exclusion ? {} : { sample }),
       }));
       return {
-        status: "ok", asOf: new Date(now).toISOString(), fromExclusive: new Date(cutoff).toISOString(), ...coverage,
-        pricingRetryAt, audit, exclusions,
-        pricingIncomplete: eligible.some((row) => row.pricingIncomplete),
-        groups: itemPreview(eligible, assetId, now),
+        status: "ok", asOf: new Date(now).toISOString(), fromExclusive: new Date(cutoff).toISOString(),
+        ...(historyFailure ? { partial: true, historyFailure } : { reason: reason ?? "cap" }),
+        pricingActive, pricingRetryAt: canPriceMore ? pricingRetryAt : null, retryReason, audit, exclusions, groups,
+        pricingIncomplete: eligible.some(({ sample }) => sample.overpay === null),
       };
     }
+
+    if (needed.size) {
+      if (readStoredProfile) {
+        await Promise.all([...needed].map(async ([id, { through }]) => {
+          const lookup = await readStoredProfile(id, through);
+          if (lookup) accept(id, lookup);
+        }));
+      }
+      const candidates = needed.get(assetId).candidates;
+      valueCandidates(candidates);
+      onProgress(result(true));
+
+      while (true) {
+        // Give equal weight to each group's coverage and favor baskets closest to being fully priced.
+        const scores = new Map();
+        for (const { row, group } of candidates) {
+          const failures = row.sample.pricingFailures;
+          if (!failures.length || failures.some(({ pending }) => !pending)) continue;
+          const missing = new Set(failures.map(({ assetId: id }) => id));
+          const weight = 1 / (groupSizes[group] * missing.size ** 2);
+          for (const id of missing) {
+            if (!lookups.has(id) || lookups.get(id).refresh) scores.set(id, (scores.get(id) ?? 0) + weight);
+          }
+        }
+        const id = scores.has(assetId) ? assetId : [...scores].reduce((best, entry) =>
+          entry[1] > best[1] ? entry : best, [null, 0])[0];
+        if (!id || (pricingRetryAt !== null && pricingRetryAt <= clock())) break;
+        if (!isActive()) {
+          pricingRetryAt = clock();
+          break;
+        }
+        const { through, candidates: affected } = needed.get(id);
+        const lookup = await readTradeProfile(id, through);
+        accept(id, lookup);
+        valueCandidates(affected);
+        onProgress(result(true));
+        // With a shared cooldown or exhausted budget, no remaining profile can start this pass.
+        if (lookup.retryAt && (lookup.failure?.reason.startsWith("deferred-") || lookup.failure?.httpStatus === 429)) {
+          pricingRetryAt = Math.max(pricingRetryAt ?? 0, lookup.retryAt);
+          retryReason = lookup.failure.httpStatus === 429 ? "deferred-provider-cooldown" : lookup.failure.reason;
+          break;
+        }
+        if (id === assetId && !lookup.profile?.history) break;
+      }
+    }
+
+    return {
+      ...result(),
+      ...(!historyFailure || (offset && (reusedTail || records.length >= previous.length)) ? { records } : {}),
+    };
   }
 
   return { sampleItem };

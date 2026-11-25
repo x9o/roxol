@@ -45,11 +45,14 @@ node tools/overpay/resolve-trades.mjs trades.json valued-trades.json --completed
 node tools/overpay/validate-trades.mjs trades.json pilot.json audit.json
 node tools/overpay/item-overpay.test.mjs
 node tools/overpay/overpay-sampling.test.mjs
+node tools/overpay/market-profile-retries.test.mjs
 ```
 
 Open `itemOverpay.items[assetId]` in the valuation report. Each group's `recent` window covers the last 30 days and `allObserved` covers observations supplied in the input. Exported pages determine how much of each window is represented.
 
-The Marketplace sampler uses RoUtility's newest-first first-observation order to stop at the 30-day boundary. **Download sample audit** includes all sampled records in `audit`, with eligibility exclusions, per-trade pricing failures, and imbalance flags. The top-level `exclusions` tallies eligibility reasons and `trades` contains the eligible records for the standalone resolver. The extension shares successful historical profiles across asset pages and sessions using IndexedDB. A profile can price observations through its original fetch time. Across tabs, Roxol makes up to 24 new profile requests in a rolling minute. It also observes Rolimon's `Retry-After` response to HTTP 429. Deferred lookups have no HTTP status. An open Overpay panel retries when the wait ends.
+The Marketplace sampler fixes its sample before pricing. It uses RoUtility's newest-first first-observation order and stops at the 30-day boundary, the end of history, or 500 records. **Download sample audit** includes all sampled records in `audit`, with eligibility exclusions, per-trade pricing failures, and imbalance flags. The top-level `exclusions` tallies eligibility reasons and `trades` contains the eligible records for the standalone resolver.
+
+The extension checks IndexedDB for needed profiles and applies historical prices through each profile's fetch time. One shared queue spaces new profile requests at least 2.5 seconds apart and caps them at 24 per rolling minute. A provider 429 pauses the queue until `Retry-After`, with a 60-second fallback when the header is missing or invalid. Network errors, timeouts, and transient HTTP failures get up to two retries, after 15 and 45 seconds. Deferred lookups carry no HTTP status of their own. The panel shows live priced, pending, and unavailable counts and automatically resumes work while open. A trade stays unpriced when any item lacks sufficient dated evidence.
 
 The standalone valuation report works from the supplied export and uses the end of each observation interval for its recent window. Its `normalizationExclusions` and `excludedRecords` preserve duplicate and malformed inputs that could not be normalized into `trades`. The `profileFailures` map carries reason codes and observed HTTP statuses by asset ID. Individual resolved records include the severe-imbalance flag and historical valuation gaps by item row.
 
@@ -58,6 +61,21 @@ The standalone valuation report works from the supplied export and uses the end 
 - Valuation coverage is fully priced trades divided by eligible trades for that item and group, with counts for assigned Value alone and for baskets using RAP. Every copy needs a positive historical valuation. Invalid quantities, duplicate copy IDs, the same asset on both sides, many-for-many trades, bundled targets, and unusable observation times are tallied as exclusions. Distinct copies of the same asset can appear together on one side and each contributes its quantity to the total. Copy-specific premiums are outside the item valuation.
 - Standard market-rate confidence requires at least 30 retained trades, at least 80% pricing coverage, and no more than 10% of priced trades severely imbalanced. Fewer than 10 retained trades yields an insufficient-sample label. Other samples have low confidence. Unpriced-reason counts can overlap within a trade.
 - The calculations use item values for all samples. Robux coverage counts priced samples with unknown, proof-reported zero, and proof-reported nonzero Robux. The resolver carries over amounts only from copy-corroborated proofs and records the fee basis when documented. These amounts stay out of the item-only OP calculations.
+
+### Marketplace cold-cache verification
+
+On November 25, 2026, two live item pages in a fresh headless Edge profile reached 33/133 swaps and 1/117 downgrades for Silver King of the Night (SKOTN), and 31/133 swaps and 2/92 downgrades for The Classic ROBLOX Fedora (CF). The previous scheduler started 24 profile requests in a burst. Sixteen succeeded and eight returned HTTP 429 with `Retry-After` values of 2,791 to 2,792 seconds. The panel retried its history once at the local budget boundary, but sent no new profile requests and showed no coverage gains during the six-minute observation. Neither group for either item reached 80% or 95%. The 429 cooldown prevented further live measurement. The previous sampler also spent the request budget in page order, and transient non-429 failures did not schedule a retry by themselves.
+
+A separate cold-cache Edge run opened both live Roblox pages concurrently and used the full live RoUtility samples with fixture Rolimon's profile responses. These times measure when the UI first displayed each threshold, from navigation. The fixture supplied complete dated history, one 429 with an eight-second `Retry-After`, and one temporary 503. The separate recovery smoke run measured 8.124 seconds before requests resumed and 22.591 seconds before the 503 retried successfully. The fixture timings measure scheduling and UI updates with known inputs. Live historical coverage can fall below the fixture's coverage.
+
+| Item and trade group | Eligible trades | Time to 80% | Time to 95% |
+| --- | ---: | ---: | ---: |
+| SKOTN one-for-one | 133 | 4:34 | 8:04 |
+| SKOTN one-for-many | 117 | 6:34 | 10:06 |
+| CF one-for-one | 133 | 6:08 | 7:29 |
+| CF one-for-many | 92 | 8:30 | 10:19 |
+
+Each previously unseen counterpart still requires a profile. One-for-many trades can require several profiles, and shared provider limits or missing historical Value and dated RAP can delay or prevent full coverage. The 24-per-minute cap is Roxol's local maximum. Rolimon's can impose a stricter limit, as the live run showed. [Architectures for a 10-second estimate](../../OVERPAY_ANALYTICS_PLAN.md#5-serve-marketplace-estimates-within-10-seconds)
 
 ### Completed-trade audit
 

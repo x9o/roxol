@@ -100,15 +100,17 @@ const RoxolOverpay = (() => {
     const disclosure = element("details", "roxol-overpay-history");
     const toggle = element("summary", "", `Show full sampled history (${ui.format(history.length)} trades)`);
     disclosure.append(toggle);
-    disclosure.addEventListener("toggle", () => {
+    function renderOlder() {
       toggle.textContent = disclosure.open ? "Hide older trades" : `Show full sampled history (${ui.format(history.length)} trades)`;
       if (!disclosure.open || disclosure.querySelector("ul")) return;
       const older = element("ul", "roxol-overpay-trades");
       older.append(...history.slice(5).map(tradeRow));
       disclosure.append(older);
-    });
+    }
+    disclosure.addEventListener("toggle", renderOlder);
     body.append(disclosure);
     disclosure.open = preserveOpen;
+    if (preserveOpen) renderOlder();
   }
 
   function mount(assetId) {
@@ -119,6 +121,20 @@ const RoxolOverpay = (() => {
       ui.link("RoUtility", `https://routility.io/catalog/${assetId}/trades`, true));
     const status = element("p", "roxol-overpay-note", "Loading overpay…");
     status.setAttribute("role", "status");
+    const progress = element("ul", "roxol-overpay-progress");
+    const progressRows = {};
+    for (const [group, label] of [["swap", "One-for-one"], ["downgrade", "One-for-many"]]) {
+      const row = element("li");
+      const title = element("span", "", label);
+      const count = element("span");
+      const bar = element("progress");
+      bar.setAttribute("aria-label", label + " historical valuation coverage");
+      row.append(title, count, bar);
+      progress.append(row);
+      progressRows[group] = { count, bar };
+    }
+    const estimateStatus = element("p", "roxol-overpay-estimate-status");
+    estimateStatus.hidden = true;
     panel.append(header, status);
 
     const filter = element("div", "roxol-overpay-filter");
@@ -132,12 +148,23 @@ const RoxolOverpay = (() => {
     const options = { swap: ui.button("One-for-one"), downgrade: ui.button("One-for-many") };
     let selected;
     let sample;
+    let revision;
+    let unavailableAttempts = 0;
 
     function select(group, preserveOpen = false) {
       selected = group;
-      const open = preserveOpen && !!body.querySelector(".roxol-overpay-history[open]");
+      const older = preserveOpen && body.querySelector(".roxol-overpay-history[open]");
+      const scroll = older?.querySelector("ul")?.scrollTop;
+      const focused = preserveOpen ? [...body.querySelectorAll("summary, a")].indexOf(document.activeElement) : -1;
       for (const [key, button] of Object.entries(options)) button.setAttribute("aria-pressed", String(group === key));
-      renderGroup(body, sample.groups[group], open);
+      const { valuationCoverage } = sample.groups[group].summary;
+      estimateStatus.hidden = !sample.partial && !valuationCoverage.pendingTrades;
+      estimateStatus.textContent = estimateStatus.hidden ? "" :
+        "Preliminary estimates. Statistics may change as more history is priced.";
+      renderGroup(body, sample.groups[group], !!older);
+      const restoredList = older && body.querySelector(".roxol-overpay-history ul");
+      if (scroll && restoredList) restoredList.scrollTop = scroll;
+      if (focused >= 0) body.querySelectorAll("summary, a")[focused]?.focus({ preventScroll: true });
     }
 
     for (const [group, button] of Object.entries(options)) {
@@ -150,28 +177,59 @@ const RoxolOverpay = (() => {
       ...sample, trades: sample.audit.flatMap(({ trade, exclusion }) => trade && !exclusion ? [trade] : []),
     }));
 
+    function schedule(delay) {
+      setTimeout(() => {
+        if (panel.isConnected) void refresh();
+      }, delay);
+    }
+
     async function refresh() {
-      const data = await ui.request("overpay", { assetId });
-      if (data?.status !== "ok") {
-        status.textContent = sample ? "The latest overpay refresh was unavailable." : "RoUtility trade data is unavailable.";
+      const data = await ui.request("overpay", { assetId, revision });
+      if (data?.status === "unchanged" || data?.status === "loading") {
+        schedule(2000);
         return;
       }
+      if (data?.status !== "ok") {
+        status.hidden = false;
+        status.textContent = sample ? "The latest overpay refresh was unavailable." : "RoUtility trade data is unavailable.";
+        if (++unavailableAttempts <= 3) schedule(20_000);
+        return;
+      }
+      unavailableAttempts = 0;
+      revision = data.revision;
       const first = !sample;
       sample = data;
-      if (first) panel.append(filter, body, auditNote, download, note);
+      if (first) panel.append(progress, filter, estimateStatus, body, auditNote, download, note);
       const notices = [];
       if (data.partial) notices.push("RoUtility history could only be partially refreshed.");
-      if (data.pricingRetryAt) notices.push("Some valuations are pending and will refresh automatically.");
-      else if (data.pricingIncomplete) notices.push("Some Rolimon’s profiles could not be loaded.");
-      status.textContent = notices.join(" ");
+      if (data.pricingActive) notices.push("Pricing sampled trades…");
+      else if (data.pricingRetryAt) {
+        const next = new Date(data.pricingRetryAt).toLocaleTimeString();
+        const limited = data.retryReason === "deferred-provider-cooldown" ||
+          data.retryReason === "deferred-local-request-budget";
+        notices.push(limited ? `Waiting for the historical profile request limit. Resumes at ${next}.` :
+          `Waiting to retry historical valuations at ${next}.`);
+      } else if (data.pricingIncomplete) notices.push("Some trades lack enough historical data to price.");
+      const announcement = notices.join(" ");
+      if (status.textContent !== announcement) status.textContent = announcement;
       status.hidden = !notices.length;
+
+      for (const [group, { count, bar }] of Object.entries(progressRows)) {
+        const { pricedTrades, eligibleTrades, pendingTrades, unavailableTrades } =
+          data.groups[group].summary.valuationCoverage;
+        const coverage = eligibleTrades ? ` (${Math.floor(pricedTrades * 100 / eligibleTrades)}%)` : "";
+        const waiting = pendingTrades ? ` · ${ui.format(pendingTrades)} pending` : "";
+        const unavailable = unavailableTrades ? ` · ${ui.format(unavailableTrades)} unavailable` : "";
+        count.textContent = `${ui.format(pricedTrades)} of ${ui.format(eligibleTrades)} priced${coverage}${waiting}${unavailable}`;
+        bar.max = eligibleTrades || 1;
+        bar.value = pricedTrades;
+      }
       const excluded = Object.values(data.exclusions).reduce((sum, count) => sum + count, 0);
       auditNote.textContent = `${ui.format(data.audit.length)} sampled records · ${ui.format(excluded)} excluded before trade statistics`;
       select(selected ?? (data.groups.downgrade.history.length ? "downgrade" : "swap"), true);
-      if (data.pricingRetryAt) {
-        setTimeout(() => {
-          if (panel.isConnected) void refresh();
-        }, Math.max(2000, Math.min(2_147_483_647, data.pricingRetryAt - Date.now() + 500)));
+      if (data.pricingActive) schedule(2000);
+      else if (data.pricingRetryAt) {
+        schedule(Math.max(1000, Math.min(2_147_483_647, data.pricingRetryAt - Date.now() + 100)));
       }
     }
 

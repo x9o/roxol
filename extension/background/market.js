@@ -8,13 +8,18 @@
   const tradeHistoryCache = new Map();
   const tradeProfileCache = new Map();
   const overpayCache = new Map();
+  const overpayHistoryCache = new Map();
   const overpayStorageKey = "overpay-samples-v1";
   const profileLimitKey = "overpay-profile-request-window";
+  const profileRetryKey = "overpay-profile-retries";
   const profileCacheTTL = 6 * 60 * 60_000;
   const profileRequestWindow = 60_000;
   const profileRequestBudget = 24;
+  const profileRequestSpacing = profileRequestWindow / profileRequestBudget;
+  let profileLane = Promise.resolve();
   let saveSamples = Promise.resolve();
   let profileLimits;
+  let profileRetries;
   let profileDatabase;
   const listingCache = new Map();
   const playerCache = new Map();
@@ -39,13 +44,14 @@
     }
   }
 
-  function request(url, init = {}, format = "json") {
+  function request(url, init = {}, format = "json", onStart) {
     if (requests.length >= 160) return Promise.reject(new Error("Market request queue is full"));
     return new Promise((resolve, reject) => {
       requests.push({
         resolve,
         reject,
         task: async () => {
+          onStart?.();
           const timeout = AbortSignal.timeout(8000);
           const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
           const response = await fetch(url, {
@@ -346,36 +352,67 @@
     return chrome.storage.local.set({ [profileLimitKey]: limits }).catch(() => {});
   }
 
-  async function fetchTradeProfile(assetId, through, previous) {
-    const stored = previous?.history ? previous : await localTradeProfile(assetId).catch(() => null);
-    if (stored?.checkedAt >= through) return { profile: stored };
+  function readProfileRetries() {
+    return profileRetries ??= chrome.storage.session.get(profileRetryKey)
+      .then((entries) => new Map(Object.entries(entries[profileRetryKey] ?? {})))
+      .catch(() => new Map());
+  }
 
+  async function saveProfileRetry(assetId, result) {
+    const retries = await readProfileRetries();
+    if (result.attempts) {
+      const { attempts, failure, retryAt } = result;
+      const now = Date.now();
+      for (const [id, retry] of retries) {
+        if (retry.expires <= now) retries.delete(id);
+      }
+      retries.set(assetId, { attempts, failure, retryAt, expires: (retryAt ?? now) + itemTTL });
+      if (retries.size > 1000) retries.delete(retries.keys().next().value);
+    } else if (!retries.delete(assetId)) {
+      return;
+    }
+    await chrome.storage.session.set({ [profileRetryKey]: Object.fromEntries(retries) }).catch(() => {});
+  }
+
+  async function fetchTradeProfile(assetId, previous) {
+    const stored = previous?.profile ?? null;
     const limits = await (profileLimits ??= chrome.storage.local.get(profileLimitKey)
       .then((entries) => entries[profileLimitKey] ?? { starts: [], cooldown: 0 })
       .catch(() => ({ starts: [], cooldown: 0 })));
-    const now = Date.now();
     const fail = (reason, httpStatus = null, retryAt = null, details = {}) => ({
-      profile: stored ?? null, failure: { reason, httpStatus, ...details }, retryAt,
+      profile: stored, failure: { reason, httpStatus, ...details }, retryAt,
     });
+    const transient = (reason, httpStatus, details) => {
+      const attempts = (previous?.attempts ?? 0) + 1;
+      const retryAt = attempts < 3 ? Date.now() + (attempts === 1 ? 15_000 : 45_000) : null;
+      return { ...fail(reason, httpStatus, retryAt, details), attempts };
+    };
+    let now = Date.now();
     if (limits.cooldown > now) {
       return fail("deferred-provider-cooldown", null, limits.cooldown, { triggerHttpStatus: 429 });
     }
+    const nextStart = (limits.starts.at(-1) ?? 0) + profileRequestSpacing;
+    if (nextStart > now) await new Promise((resolve) => setTimeout(resolve, nextStart - now));
+    now = Date.now();
     limits.starts = limits.starts.filter((start) => start > now - profileRequestWindow);
     if (limits.starts.length >= profileRequestBudget) {
       return fail("deferred-local-request-budget", null, limits.starts[0] + profileRequestWindow);
     }
-    limits.starts.push(now);
-    const committed = saveProfileLimits(limits);
+    let committed;
     const source = `https://www.rolimons.com/item/${assetId}`;
     try {
-      const { status, data, retryAfter } = await request(source, {}, "text");
+      const { status, data, retryAfter } = await request(source, {}, "text", () => {
+        limits.starts.push(Date.now());
+        committed = saveProfileLimits(limits);
+      });
       if (status === 429) {
         const receivedAt = Date.now();
         const retryAt = /^\d+$/.test(retryAfter) ? receivedAt + Number(retryAfter) * 1000 : Date.parse(retryAfter);
-        limits.cooldown = Math.max(limits.cooldown, retryAt > receivedAt ? retryAt : receivedAt + profileRequestWindow);
+        limits.cooldown = Math.max(limits.cooldown, retryAt >= receivedAt ? retryAt : receivedAt + profileRequestWindow);
         await saveProfileLimits(limits);
         return fail("profile-http-error", status, limits.cooldown);
       }
+      if (status === 408 || status === 425 || status >= 500) return transient("profile-http-error", status);
       if (data === null) return fail("profile-http-error", status);
       const profile = RoxolTradeValuations.parseItemProfile(data, assetId, source, Date.now());
       if (!profile) return fail("profile-unrecognized", status);
@@ -384,28 +421,58 @@
       return { profile };
     } catch (error) {
       const reason = error.name === "TimeoutError" ? "profile-timeout" : "profile-request-error";
-      return fail(reason, null, null, { message: error.message });
+      return transient(reason, null, { message: error.message });
     } finally {
       await committed;
     }
   }
 
-  async function readTradeProfile(assetId, through) {
-    const existing = cached(tradeProfileCache, assetId);
-    const previous = await existing;
-    if (previous?.failure || previous?.profile?.checkedAt >= through) return previous;
-    const latest = cached(tradeProfileCache, assetId);
-    if (latest && latest !== existing) return latest;
-    return remember(tradeProfileCache, assetId, fetchTradeProfile(assetId, through, previous?.profile), 1000,
-      ({ failure, retryAt }) => retryAt ? Math.max(0, retryAt - Date.now()) : failure ? itemTTL : profileCacheTTL);
+  async function readStoredTradeProfile(assetId, through) {
+    const entry = tradeProfileCache.get(assetId);
+    const previous = entry && await entry.result;
+    if (previous?.profile?.history && previous.profile.checkedAt >= through) return { profile: previous.profile };
+    const stored = await localTradeProfile(assetId).catch(() => null);
+    if (stored?.checkedAt >= through) return { profile: stored };
+    const now = Date.now();
+    if (entry?.expires > now && previous?.failure) return previous;
+    const fallback = previous?.profile?.history ? previous.profile : stored;
+    const retry = (await readProfileRetries()).get(assetId);
+    if (retry?.expires > now && (retry.retryAt === null || retry.retryAt > now)) {
+      return { ...retry, profile: fallback };
+    }
+    return fallback?.history ? { profile: fallback, refresh: true } : null;
   }
 
-  async function fetchOverpay(assetId) {
+  function readTradeProfile(assetId, through) {
+    const result = profileLane.then(async () => {
+      const known = await readStoredTradeProfile(assetId, through);
+      if (known && !known.refresh) return known;
+      const retry = (await readProfileRetries()).get(assetId);
+      const attempts = retry?.expires > Date.now() ? retry.attempts : 0;
+      const result = fetchTradeProfile(assetId, { profile: known?.profile, attempts }).then(async (lookup) => {
+        const deferred = lookup.failure?.reason.startsWith("deferred-") || lookup.failure?.httpStatus === 429;
+        if (!deferred) await saveProfileRetry(assetId, lookup);
+        return lookup;
+      });
+      return remember(tradeProfileCache, assetId, result, 1000, ({ failure, retryAt }) =>
+        retryAt == null ? (failure ? itemTTL : profileCacheTTL) : Math.max(0, retryAt - Date.now()));
+    });
+    profileLane = result.catch(() => {});
+    return result;
+  }
+
+  async function fetchOverpay(assetId, job) {
     const { [overpayStorageKey]: saved } = await chrome.storage.local.get(overpayStorageKey).catch(() => ({}));
     const previous = saved?.find((entry) => entry.assetId === assetId)?.records ?? [];
     const { records, ...result } = await RoxolOverpaySampling.sampleItem({
-      assetId, previous, readTradeProfile,
-      readPage: (page, limit) => fetchTradeHistory(assetId, page, limit),
+      assetId, previous, readTradeProfile, readStoredProfile: readStoredTradeProfile,
+      onProgress: (snapshot) => { job.snapshot = { ...snapshot, revision: crypto.randomUUID() }; },
+      isActive: () => Date.now() - job.lastViewed < 35_000,
+      readPage(page, limit) {
+        const key = `${assetId}:${page}`;
+        return cached(overpayHistoryCache, key) || remember(overpayHistoryCache, key,
+          fetchTradeHistory(assetId, page, limit), 120, 2 * 60_000);
+      },
     });
     if (records) {
       saveSamples = saveSamples.then(async () => {
@@ -416,6 +483,35 @@
       await saveSamples;
     }
     return result;
+  }
+
+  function readOverpay(assetId, revision) {
+    const now = Date.now();
+    let job = overpayCache.get(assetId);
+    if (!job) {
+      for (const [id, entry] of overpayCache) {
+        if (!entry.running && entry.expires <= now) overpayCache.delete(id);
+      }
+      job = { snapshot: { status: "loading" }, expires: now };
+      overpayCache.set(assetId, job);
+    }
+    job.lastViewed = now;
+    if (!job.running && job.expires <= now) {
+      job.running = true;
+      fetchOverpay(assetId, job).then((result) => {
+        job.snapshot = { ...result, revision: crypto.randomUUID() };
+        job.expires = result.pricingRetryAt ?? (Date.now() + (result.status === "ok" ? 120_000 : failureTTL));
+      }, () => {
+        job.snapshot = { ...job.snapshot, pricingActive: false, revision: crypto.randomUUID() };
+        job.expires = Date.now() + failureTTL;
+        if (job.snapshot.status === "ok") job.snapshot.pricingRetryAt = job.expires;
+        else job.snapshot = { status: "unavailable" };
+      }).finally(() => { job.running = false; });
+    }
+    if (!job.running) return job.snapshot;
+    if (job.snapshot.status !== "ok") return { status: "loading" };
+    if (revision === job.snapshot.revision && job.snapshot.pricingActive) return { status: "unchanged" };
+    return { ...job.snapshot, pricingActive: true };
   }
 
   async function eligibility(id) {
@@ -462,9 +558,7 @@
       if (route.page !== "detail" || route.kind !== "asset" || message.assetId !== route.id) {
         return { status: "unavailable" };
       }
-      return cached(overpayCache, route.id) || remember(overpayCache, route.id,
-        fetchOverpay(route.id).catch(() => ({ status: "unavailable" })), 60, ({ pricingRetryAt }) =>
-          pricingRetryAt ? Math.max(0, Math.min(2 * 60_000, pricingRetryAt - Date.now())) : 2 * 60_000);
+      return readOverpay(route.id, message.revision);
     },
     "roxol:market-best-listing"(message) {
       const item = targetOf(message.item?.kind, message.item?.id);
