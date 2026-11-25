@@ -285,7 +285,7 @@ const RoxolMarketUI = (() => {
     if (!activityOnly && meta?.projected) add("Projected", "Projected by Rolimon’s");
     if (meta?.demand) add(`${meta.demand} demand`, "Demand · Rolimon’s", { iconName: "demand" });
     else dailySales?.then((label) => {
-      if (label) add(label, dailySalesTooltip, { iconName: "activity", focusable: true });
+      if (label) add(label, dailySalesTooltip, { focusable: true });
     });
     if (activityOnly || !meta) return badges;
     if (meta.trend) add(`Trend · ${meta.trend}`, "Published trend · Rolimon’s", { iconName: `trend-${meta.trend.toLowerCase()}` });
@@ -708,7 +708,7 @@ const RoxolMarketUI = (() => {
       } else {
         dailySales.then((label) => {
           if (!label || !cardOverlay.isConnected) return;
-          cardOverlay.prepend(cardBadge(`${label} · ${dailySalesTooltip}`, "activity", "daily-sales", label));
+          cardOverlay.prepend(cardBadge(`${label} · ${dailySalesTooltip}`, null, "daily-sales", label));
         });
       }
     }

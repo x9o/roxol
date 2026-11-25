@@ -37,7 +37,7 @@ Roxol reuses item and resale helpers from Nevos. [Nevos source license](extensio
 
 ## Resale activity badges
 
-Rated item cards show a demand icon colored by Rolimon's tier. When Rolimon's has no assigned demand rating, Roxol uses the **Avg Daily Sales** figure from its public item or bundle page. Hover over or focus the badge for an explanation of the resale activity metric. The extension's background worker shares lookups across tabs, caches page results for five minutes, and caches transient failures for 20 seconds. A published zero displays as `0.00 sales/day`. If the figure is unavailable, the badge is hidden.
+Rated item cards show a demand icon colored by Rolimon's tier. When Rolimon's has no assigned demand rating, Roxol uses the **Avg Daily Sales** figure from its public item or bundle page. On thumbnails, the single-line sales badge matches the neighboring controls. Hover over or focus the badge to see the full figure and an explanation of the resale activity metric. The extension's background worker shares lookups across tabs, caches page results for five minutes, and caches transient failures for 20 seconds. A published zero displays as `0.00 sales/day`. If the figure is unavailable, the badge is hidden.
 
 To verify the fallback, open Epic Egg (`4773569689`) in Marketplace and compare its badge with Rolimon's published figure. Check the same badge on an inventory or trade card that contains an unrated limited item. A rated item should still show its demand indicator. [Epic Egg on Rolimon’s](https://www.rolimons.com/item/4773569689)
 
