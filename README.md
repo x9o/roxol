@@ -55,6 +55,8 @@ To verify the section, open Fall Fairy (`128217885`) and Black Iron Antlers (`39
 
 ## RoUtility trade history
 
+The **View trades** button appears on limited Marketplace asset pages.
+
 Roxol requests public history from `routility.io` when the Overpay section loads or you open or page through the viewer. Requests send the asset ID and page number without cookies. The viewer requests item thumbnails from Roblox in batches. Each basket sums quantities at RoUtility's reported Value per copy, falling back to reported RAP when Value is missing or zero. The viewer shows OP as Side B minus Side A and divides by Side A for OP percentage. If either total is unavailable, the viewer labels the trade **Unpriced trade**. A basket worth more than twice the other is labelled **Severe imbalance**. Expand **Valuation details** to inspect the original RAP and Value, quantities, serials, and item observation times where available. RoUtility cannot see side payments.
 
 **Export viewed trades** downloads JSON for the pages visited since opening the viewer. It includes source page coverage and fetch times, deduplicated trade records, and both item baskets with quantities, available copy IDs, observation times, and RoUtility's RAP and `valueThen`. Missing fields are `null`. An explicit zero remains zero in the export. The export omits participant identifiers and side payments.

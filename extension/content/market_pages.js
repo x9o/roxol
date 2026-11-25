@@ -206,11 +206,12 @@
 
   function mountDetail(page) {
     const detail = document.querySelector(".item-details-section") || document.querySelector(detailSelector);
+    const limited = page.detailData?.limited || !!detail?.querySelector(limitedSelector);
     const itemTitle = document.querySelector(detailTitleSelector) ||
       (detail?.querySelector(".price-row-container, .price-container-text, [data-testid='item-price']")
         ? detail.querySelector("h1") : null);
     const title = itemTitle || detail?.querySelector("h1");
-    if (itemTitle && page.kind === "asset") {
+    if (itemTitle && page.kind === "asset" && limited) {
       if (!page.tradesLink) {
         const link = ui.link("View trades", `https://routility.io/catalog/${page.id}/trades`, true);
         link.className = "roxol-view-trades";
@@ -239,8 +240,8 @@
       return;
     }
     if (!page.panel) {
-      const { data, resale, limited, rap } = page.detailData;
-      if (!limited && !detail?.querySelector(limitedSelector) && resale?.rap == null && !resale?.daily?.length) return;
+      const { data, resale, rap } = page.detailData;
+      if (!limited && resale?.rap == null && !resale?.daily?.length) return;
       page.panel = ui.itemPanel({
         kind: page.kind, id: page.id, ...data, limited: true,
         rap,
@@ -258,8 +259,7 @@
     mountBestPriceDeals(page, detail);
     const valueAnchor = page.deals?.previousElementSibling === anchor ? page.deals : anchor;
     if (page.panel.previousElementSibling !== valueAnchor) valueAnchor.after(page.panel);
-    if (!page.overpayPanel && page.kind === "asset" &&
-        (page.detailData.limited || detail?.querySelector(limitedSelector))) {
+    if (!page.overpayPanel && page.kind === "asset" && limited) {
       page.overpayPanel = RoxolOverpay.mount(page.id);
       panels.add(page.overpayPanel);
     }
