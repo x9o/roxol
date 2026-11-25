@@ -194,6 +194,10 @@
   color: var(--roxol-ink);
   border-color: transparent;
 }
+.roxol-card-overlay .roxol-card-demand[data-demand="amazing"] { background: #ffe082; color: #533708; }
+.roxol-card-overlay .roxol-card-demand[data-demand="high"] { background: #e9d5ff; color: #5e2389; }
+.roxol-card-overlay .roxol-card-demand[data-demand="normal"] { background: #c2efd1; color: #185239; }
+.roxol-card-overlay .roxol-card-demand:is([data-demand="low"], [data-demand="terrible"]) { background: #ffd5d1; color: #851d22; }
 .roxol-card-overlay .roxol-button.roxol-card-daily-sales {
   display: flex;
   flex-wrap: wrap;
