@@ -910,5 +910,5 @@ const RoxolMarketUI = (() => {
     return paint;
   }
 
-  return { element, link, titleLink, button, icon, metric, format, request, rolimonsItemUrl, itemPanel, mountCard, cardValue, cardPriceSelector, bestPriceDeals, inventoryView, showPlayerBadges, closeDialog };
+  return { element, link, titleLink, button, icon, metric, format, request, rolimonsItemUrl, itemPanel, mountCard, cardValue, cardPriceSelector, bestPriceDeals, inventoryView, showPlayerBadges, showDialog, closeDialog };
 })();

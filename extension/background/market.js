@@ -1,10 +1,11 @@
 (() => {
-  const { idOf, targetOf, routeOf, keyOf, rolimonsSalesUrl, amount } = RoxolTargets;
+  const { idOf, targetOf, routeOf, keyOf, rolimonsSalesUrl, amount, copyIdOf } = RoxolTargets;
   const detailsCache = new Map();
   const resaleCache = new Map();
   const inventoryCache = new Map();
   const itemFeedCache = new Map();
   const salesCache = new Map();
+  const tradeHistoryCache = new Map();
   const listingCache = new Map();
   const playerCache = new Map();
   const catalogUrl = "https://catalog.roblox.com/v1/catalog/items/details";
@@ -235,6 +236,60 @@
       readInventoryPage(id, cursor).catch(() => ({ status: "unavailable" })), 60, 60_000);
   }
 
+  function observedAt(seconds) {
+    if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 8.64e12) return null;
+    return new Date(seconds * 1000).toISOString();
+  }
+
+  function tradeBasket(items) {
+    if (!Array.isArray(items)) return [];
+    return items.map((item) => ({
+      assetId: idOf(item?.asset_id),
+      name: typeof item?.name === "string" ? item.name.trim() || null : null,
+      userAssetId: idOf(item?.uaid),
+      instanceId: copyIdOf(item?.ciid),
+      serial: idOf(item?.serial),
+      observedAt: observedAt(item?.ts),
+      rap: amount(item?.rap),
+      valueThen: amount(item?.value_then) || null,
+    }));
+  }
+
+  async function fetchTradeHistory(assetId, page) {
+    const url = `https://routility.io/web/item-trades/${assetId}?kind=trade&range=all&limit=20&page=${page}`;
+    const { data } = await request(url);
+    if (!Array.isArray(data?.trades) || amount(data.total) == null ||
+        !amount(data.page) || !amount(data.pages) || data.page > data.pages) {
+      return { status: "unavailable" };
+    }
+
+    const trades = new Map();
+    for (const row of data.trades) {
+      if (row?.kind !== "trade" || typeof row.trade_id !== "string" || !row.trade_id.trim()) continue;
+      const sideA = tradeBasket(row.side_a_items);
+      const sideB = tradeBasket(row.side_b_items);
+      if (!sideA.length || !sideB.length || ![...sideA, ...sideB].some((item) => item.assetId === assetId)) continue;
+      trades.set(row.trade_id, {
+        tradeId: row.trade_id,
+        firstObservedAt: observedAt(row.ts),
+        lastObservedAt: observedAt(row.ts_latest),
+        inferred: typeof row.inferred === "boolean" ? row.inferred : null,
+        sideA,
+        sideB,
+      });
+    }
+    return {
+      status: "ok", page: data.page, pages: data.pages, total: data.total,
+      checkedAt: new Date().toISOString(), trades: [...trades.values()],
+    };
+  }
+
+  function readTradeHistory(assetId, page) {
+    const key = `${assetId}:${page}`;
+    return cached(tradeHistoryCache, key) || remember(tradeHistoryCache, key,
+      fetchTradeHistory(assetId, page), 60, 2 * 60_000);
+  }
+
   async function eligibility(id) {
     const { data } = await request(`https://trades.roblox.com/v2/users/${id}/can-trade-with`, {
       credentials: "include",
@@ -269,6 +324,11 @@
     "roxol:market-sales"(message) {
       const item = targetOf(message.item?.kind, message.item?.id);
       return item ? readTrackedSales(item) : { status: "unavailable" };
+    },
+    "roxol:market-trade-history"(message, route) {
+      if (route.page !== "detail" || route.kind !== "asset" || message.assetId !== route.id ||
+          !amount(message.page)) return { status: "unavailable" };
+      return readTradeHistory(route.id, message.page);
     },
     "roxol:market-best-listing"(message) {
       const item = targetOf(message.item?.kind, message.item?.id);

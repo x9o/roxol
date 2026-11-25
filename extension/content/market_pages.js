@@ -206,19 +206,29 @@
 
   function mountDetail(page) {
     const detail = document.querySelector(".item-details-section") || document.querySelector(detailSelector);
-    const title = document.querySelector(detailTitleSelector) || detail?.querySelector("h1");
-    if (title && page.kind === "asset") {
+    const itemTitle = document.querySelector(detailTitleSelector) ||
+      (detail?.querySelector(".price-row-container, .price-container-text, [data-testid='item-price']")
+        ? detail.querySelector("h1") : null);
+    const title = itemTitle || detail?.querySelector("h1");
+    if (itemTitle && page.kind === "asset") {
       if (!page.tradesLink) {
         const link = ui.link("View trades", `https://routility.io/catalog/${page.id}/trades`, true);
         link.className = "roxol-view-trades";
-        link.title = "View trades on Routility (opens in a new tab)";
-        const icon = ui.element("span", "roxol-external-icon");
-        icon.setAttribute("aria-hidden", "true");
-        link.append(icon);
+        link.setAttribute("aria-haspopup", "dialog");
+        link.addEventListener("click", (event) => {
+          if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          const name = [...link.parentElement.childNodes]
+            .filter((node) => node.nodeType === Node.TEXT_NODE)
+            .map((node) => node.textContent).join("").trim();
+          RoxolTradeHistory.open(page.id, name, link.href);
+        });
         page.tradesLink = link;
         panels.add(link);
       }
-      if (page.tradesLink.parentElement !== title) title.append(page.tradesLink);
+      if (page.tradesLink.parentElement !== itemTitle) itemTitle.append(page.tradesLink);
+    } else {
+      page.tradesLink?.remove();
     }
     const anchor = detail?.querySelector(".price-row-container, .price-container-text")
       || document.querySelector(".price-row-container, .price-container-text")

@@ -36,7 +36,8 @@
     "https://inventory.roblox.com/*",
     "https://trades.roblox.com/*",
     "https://api.rolimons.com/*",
-    "https://www.rolimons.com/*"
+    "https://www.rolimons.com/*",
+    "https://routility.io/*"
   ],
   "content_scripts": [
     {
@@ -84,6 +85,7 @@
         "vendor/nevos/rolimons_item_details.js",
         "content/market_ui.js",
         "content/overpay_ui.js",
+        "content/trade_history.js",
         "content/market_pages.js"
       ],
       "css": ["content/market.css"],
