@@ -95,6 +95,26 @@ const RoxolMarketUI = (() => {
     return value == null ? "Unavailable" : numberFormat.format(value);
   }
 
+  const signedNumber = new Intl.NumberFormat(undefined, { signDisplay: "exceptZero", maximumFractionDigits: 1 });
+  const signedPercent = new Intl.NumberFormat(undefined, {
+    style: "percent", signDisplay: "exceptZero", maximumFractionDigits: 1,
+  });
+
+  function tradingFigure(value, percentage = false) {
+    const formatter = percentage ? signedPercent : signedNumber;
+    const number = element("span", "roxol-number", value == null ? "—" : formatter.format(value));
+    if (value) number.dataset.direction = value > 0 ? "up" : "down";
+    return number;
+  }
+
+  function tradingStat(label, content) {
+    const cell = element("div");
+    const value = element("dd");
+    value.append(content);
+    cell.append(element("dt", "", label), value);
+    return cell;
+  }
+
   function metric(label, iconName, value) {
     const row = element("div", "roxol-metric");
     const caption = element("dt", "", label);
@@ -919,5 +939,5 @@ const RoxolMarketUI = (() => {
     return paint;
   }
 
-  return { element, link, titleLink, button, icon, metric, format, request, downloadJson, rolimonsItemUrl, itemPanel, mountCard, cardValue, cardPriceSelector, bestPriceDeals, inventoryView, showPlayerBadges, showDialog, closeDialog };
+  return { element, link, titleLink, button, icon, metric, format, tradingFigure, tradingStat, request, downloadJson, rolimonsItemUrl, itemPanel, mountCard, cardValue, cardPriceSelector, bestPriceDeals, inventoryView, showPlayerBadges, showDialog, closeDialog };
 })();

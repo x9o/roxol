@@ -269,8 +269,9 @@
     }
     const delta = receive - give;
     const change = give > 0n ? ` (${percent.format(Number(delta) / Number(give))})` : "";
-    chip.dataset.direction = delta > 0n ? "up" : delta < 0n ? "down" : "flat";
-    chip.append(ui.element("strong", "", `${signed.format(delta)}${change}`));
+    const figure = ui.element("strong", "roxol-number", `${signed.format(delta)}${change}`);
+    figure.dataset.direction = delta > 0n ? "up" : delta < 0n ? "down" : "flat";
+    chip.append(figure);
     chip.title = `Give ${ui.format(give)} · Receive ${ui.format(receive)}`;
     return chip;
   }

@@ -325,6 +325,24 @@
       fetchTradeHistory(assetId, page), 60, 2 * 60_000);
   }
 
+  async function readThumbnails(inputs) {
+    const ids = new Set(inputs.slice(0, 100).map(idOf).filter(Boolean));
+    if (!ids.size) return { images: {} };
+    // Thumbnail loading is separate from the market request queue.
+    const response = await fetch(
+      `https://thumbnails.roblox.com/v1/assets?assetIds=${[...ids].join(",")}&size=150x150&format=Png&isCircular=false`,
+      { credentials: "omit", signal: AbortSignal.timeout(10_000) },
+    );
+    if (!response.ok) return { status: "unavailable" };
+    const { data } = await response.json();
+    const images = Object.fromEntries((data ?? []).flatMap(({ targetId, state, imageUrl }) => {
+      const id = idOf(targetId);
+      return state === "Completed" && ids.has(id) && /^https:\/\/[\w-]+\.rbxcdn\.com\//i.test(imageUrl)
+        ? [[id, imageUrl]] : [];
+    }));
+    return { images };
+  }
+
   function openProfileDatabase() {
     return profileDatabase ??= new Promise((resolve, reject) => {
       const open = indexedDB.open("roxol-trade-profiles", 1);
@@ -553,6 +571,11 @@
       if (route.page !== "detail" || route.kind !== "asset" || message.assetId !== route.id ||
           !amount(message.page)) return { status: "unavailable" };
       return readTradeHistory(route.id, message.page);
+    },
+    "roxol:market-thumbnails"(message, route) {
+      if (route.page !== "detail" || route.kind !== "asset" || message.assetId !== route.id ||
+          !Array.isArray(message.ids)) return { status: "unavailable" };
+      return readThumbnails(message.ids);
     },
     "roxol:market-overpay"(message, route) {
       if (route.page !== "detail" || route.kind !== "asset" || message.assetId !== route.id) {

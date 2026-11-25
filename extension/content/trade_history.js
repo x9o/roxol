@@ -1,34 +1,79 @@
 const RoxolTradeHistory = (() => {
   const ui = RoxolMarketUI;
-  const { element } = ui;
+  const { element, tradingFigure: figure, tradingStat: stat } = ui;
   const dateFormat = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium", timeStyle: "short", timeZone: "UTC",
   });
 
-  function basket(items, assetId, label) {
-    const side = element("div", "roxol-history-side");
-    const list = element("ul", "roxol-history-items");
+  const itemName = (item) => item.name || (item.assetId ? `Asset ${item.assetId}` : "Unknown item");
+  const snapshot = (item) => item.valueThen > 0 ? item.valueThen : item.rap > 0 ? item.rap : null;
+  const amount = (value) => value == null ? "—" : ui.format(value);
+
+  function basketTotal(items) {
+    let total = 0;
     for (const item of items) {
-      const row = element("li");
-      const name = item.name || (item.assetId ? `Asset ${item.assetId}` : "Unknown item");
+      const value = snapshot(item);
+      if (value == null || !item.quantity) return null;
+      total += value * item.quantity;
+      if (!Number.isSafeInteger(total)) return null;
+    }
+    return total || null;
+  }
+
+  function basket(items, assetId, label, total) {
+    const side = element("div", "roxol-trade-basket");
+    const heading = element("h3", "roxol-basket-heading");
+    heading.append(element("span", "", label), element("strong", "roxol-number", amount(total)));
+    const list = element("ul", "roxol-basket-items");
+    for (const item of items) {
+      const row = element("li", "roxol-basket-item");
+      const thumb = element("span", "roxol-basket-thumbnail");
+      if (item.assetId) thumb.dataset.assetId = item.assetId;
+      const title = element("div", "roxol-basket-name");
+      const name = itemName(item);
       if (item.assetId === assetId) {
-        row.append(element("strong", "roxol-history-target", name));
+        title.append(element("strong", "", name));
       } else if (item.assetId) {
-        row.append(ui.link(name, RoxolTargets.robloxItemUrl({ kind: "asset", id: item.assetId }), true));
+        title.append(ui.link(name, RoxolTargets.robloxItemUrl({ kind: "asset", id: item.assetId }), true));
       } else {
-        row.append(element("span", "", name));
+        title.append(element("span", "", name));
       }
-      if (item.serial) row.append(element("span", "roxol-history-note", ` #${item.serial}`));
-      if (item.quantity > 1) row.append(element("span", "roxol-history-note", ` ×${ui.format(item.quantity)}`));
-      row.append(element("div", "roxol-history-note roxol-history-metrics",
-        `RAP ${item.rap == null ? "—" : ui.format(item.rap)} · Value ${item.valueThen > 0 ? ui.format(item.valueThen) : "—"}`));
+      if (item.quantity > 1) title.append(element("span", "roxol-history-note", ` ×${ui.format(item.quantity)}`));
+      const value = element("div", "roxol-basket-value roxol-number", amount(snapshot(item)));
+      value.append(element("small", "roxol-history-note", item.valueThen > 0 ? "Value" : item.rap > 0 ? "RAP" : "Unpriced"));
+      row.append(thumb, title, value);
       list.append(row);
     }
-    side.append(element("h3", "roxol-history-side-label", label), list);
+    side.append(heading, list);
     return side;
   }
 
-  function tradeCard(trade, assetId) {
+  function valuationTable(items, label) {
+    const table = element("table", "roxol-table roxol-valuation-table");
+    const head = table.createTHead().insertRow();
+    for (const text of ["Item", "RAP", "Value"]) {
+      const column = element("th", "", text);
+      column.scope = "col";
+      head.append(column);
+    }
+    table.createCaption().textContent = label;
+    const body = table.createTBody();
+    for (const item of items) {
+      const row = body.insertRow();
+      const name = row.insertCell();
+      name.textContent = itemName(item);
+      const metadata = [];
+      if (item.serial) metadata.push(`#${item.serial}`);
+      if (item.quantity !== 1) metadata.push(item.quantity == null ? "Quantity unknown" : `×${ui.format(item.quantity)}`);
+      if (item.observedAt) metadata.push(`${dateFormat.format(new Date(item.observedAt))} UTC`);
+      if (metadata.length) name.append(element("small", "roxol-history-note", metadata.join(" · ")));
+      row.insertCell().textContent = amount(item.rap);
+      row.insertCell().textContent = amount(item.valueThen);
+    }
+    return table;
+  }
+
+  function tradeRecord(trade, assetId) {
     const article = element("article", "roxol-history-record");
     const caption = element("div", "roxol-history-caption");
     if (trade.lastObservedAt || trade.firstObservedAt) {
@@ -39,11 +84,44 @@ const RoxolTradeHistory = (() => {
     } else {
       caption.append(element("span", "", "Observation time unavailable"));
     }
-    if (trade.inferred) caption.append(element("span", "roxol-history-inferred", "Inferred"));
-    const sides = element("div", "roxol-history-sides");
-    sides.append(basket(trade.sideA, assetId, "Side A"), basket(trade.sideB, assetId, "Side B"));
-    article.append(caption, sides);
+    const totalA = basketTotal(trade.sideA);
+    const totalB = basketTotal(trade.sideB);
+    const op = totalA == null || totalB == null ? null : totalB - totalA;
+    if (trade.inferred) caption.append(element("span", "", "Inferred"));
+    if (op == null) caption.append(element("span", "", "Unpriced trade"));
+    else if (Math.max(totalA, totalB) / Math.min(totalA, totalB) > 2) {
+      caption.append(element("span", "", "Severe imbalance"));
+    }
+    const sides = element("div", "roxol-basket-pair");
+    sides.append(basket(trade.sideA, assetId, "Side A", totalA), basket(trade.sideB, assetId, "Side B", totalB));
+    const comparison = element("dl", "roxol-stat-grid roxol-history-comparison");
+    comparison.append(stat("OP (B − A)", figure(op)), stat("OP % of A", figure(op == null ? null : op / totalA, true)));
+    const details = element("details", "roxol-disclosure roxol-history-details");
+    const tables = element("div", "roxol-history-tables");
+    tables.append(valuationTable(trade.sideA, "Side A"), valuationTable(trade.sideB, "Side B"));
+    details.append(element("summary", "", "Valuation details"), tables);
+    article.append(caption, sides, comparison, details);
     return article;
+  }
+
+  async function loadThumbnails(records, assetId) {
+    const slots = [...records.querySelectorAll(".roxol-basket-thumbnail[data-asset-id]")];
+    const ids = [...new Set(slots.map((slot) => slot.dataset.assetId))];
+    for (let index = 0; index < ids.length && records.isConnected; index += 100) {
+      const batch = ids.slice(index, index + 100);
+      const { images } = await ui.request("thumbnails", { assetId, ids: batch }) ?? {};
+      if (!images) continue;
+      for (const slot of slots) {
+        const url = images[slot.dataset.assetId];
+        if (!url || !slot.isConnected) continue;
+        const image = element("img");
+        image.alt = "";
+        image.loading = "lazy";
+        image.addEventListener("error", () => image.remove(), { once: true });
+        image.src = url;
+        slot.append(image);
+      }
+    }
   }
 
   function download(assetId, sourceUrl, visited) {
@@ -70,11 +148,11 @@ const RoxolTradeHistory = (() => {
     const actions = element("div", "roxol-history-actions");
     actions.append(source, exportButton);
     const note = element("p", "roxol-history-note",
-      "RAP and Value are reported by RoUtility at its observation times. Side payments are unknown. A dash marks an unavailable figure.");
+      "Totals use RoUtility’s reported Value per copy, or RAP when Value is unavailable or zero. OP compares Side B against Side A. Side payments are unknown.");
     const previous = ui.button("Previous");
     const next = ui.button("Next");
     const retry = ui.button("Try again");
-    const status = element("span", "roxol-history-status");
+    const status = element("span", "roxol-history-status roxol-loading-status");
     status.setAttribute("role", "status");
     const nav = element("nav", "roxol-history-nav");
     nav.setAttribute("aria-label", "Trade history pages");
@@ -90,10 +168,12 @@ const RoxolTradeHistory = (() => {
       requestedPage = page;
       previous.disabled = next.disabled = retry.hidden = true;
       status.textContent = `Loading page ${ui.format(page)}…`;
+      status.setAttribute("data-loading", "");
       records.setAttribute("aria-busy", "true");
       const result = await ui.request("trade-history", { assetId, page });
       if (!dialog.open || !dialog.isConnected) return;
       records.removeAttribute("aria-busy");
+      status.removeAttribute("data-loading");
       if (result?.status !== "ok") {
         status.textContent = current
           ? `Page ${ui.format(page)} unavailable. Showing page ${ui.format(current.page)}.`
@@ -105,7 +185,8 @@ const RoxolTradeHistory = (() => {
         exportButton.disabled = ![...visited.values()].some((entry) => entry.trades.length);
         status.textContent = !result.total ? "No tracked trades."
           : `Page ${ui.format(result.page)} of ${ui.format(result.pages)} · ${ui.format(result.total)} tracked`;
-        records.replaceChildren(...result.trades.map((trade) => tradeCard(trade, assetId)));
+        records.replaceChildren(...result.trades.map((trade) => tradeRecord(trade, assetId)));
+        void loadThumbnails(records, assetId);
         if (result.total && !result.trades.length) {
           records.append(element("p", "roxol-history-note", "No two-sided trade records on this page."));
         }

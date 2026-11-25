@@ -1,46 +1,28 @@
+:root { --roxol-radius: 6px; }
+
+/* Shared tokens for marketplace and trading tools. */
 .roxol-market {
-  --roxol-paper: #f8f5ed;
-  --roxol-ink: #212a25;
-  --roxol-muted: #526157;
-  --roxol-line: #bfcac0;
-  --roxol-accent: #17604c;
-  --roxol-selected: #dcece3;
-  --roxol-up: #14634b;
-  --roxol-down: #9c3835;
+  --roxol-paper: light-dark(#fff, #202020);
+  --roxol-ink: light-dark(#202020, #f2f2f2);
+  --roxol-muted: light-dark(#565656, #bdbdbd);
+  --roxol-line: light-dark(#d8d8d8, #494949);
+  --roxol-selected: light-dark(#ededed, #343434);
+  --roxol-up: light-dark(#17643b, #83daa2);
+  --roxol-down: light-dark(#a22933, #ff9da6);
+  --roxol-text-small: .857em;
   color: var(--roxol-ink);
-  color-scheme: light;
-  font: 14px/1.4 "Trebuchet MS", sans-serif;
+  color-scheme: light dark;
+  font: inherit;
+  font-size: .875rem;
+  line-height: 1.4;
 }
 
-.dark-theme .roxol-market {
-  --roxol-paper: #17211c;
-  --roxol-ink: #edf2e9;
-  --roxol-muted: #bdc9bd;
-  --roxol-line: #4f6458;
-  --roxol-accent: #a4e0c7;
-  --roxol-selected: #30493a;
-  --roxol-up: #a4e0c7;
-  --roxol-down: #ffb6ab;
-  color-scheme: dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  html:not(.light-theme) body:not(.light-theme) .roxol-market {
-    --roxol-paper: #17211c;
-    --roxol-ink: #edf2e9;
-    --roxol-muted: #bdc9bd;
-    --roxol-line: #4f6458;
-    --roxol-accent: #a4e0c7;
-    --roxol-selected: #30493a;
-    --roxol-up: #a4e0c7;
-    --roxol-down: #ffb6ab;
-    color-scheme: dark;
-  }
-}
+.light-theme .roxol-market { color-scheme: light; }
+.dark-theme .roxol-market { color-scheme: dark; }
 
 .roxol-market *, .roxol-market *::before, .roxol-market *::after { box-sizing: border-box; }
 .roxol-market [hidden] { display: none !important; }
-.roxol-market :focus-visible { outline: 2px solid var(--roxol-accent); outline-offset: 2px; }
+.roxol-market :focus-visible { outline: 2px solid var(--roxol-ink); outline-offset: 2px; }
 
 .roxol-item {
   clear: both;
@@ -66,7 +48,7 @@
 .roxol-item .roxol-badges { margin-bottom: 6px; }
 .roxol-value-content > .roxol-badges .roxol-badge:not(.roxol-icon-badge) {
   padding: 1px 6px;
-  border-radius: 6px;
+  border-radius: var(--roxol-radius);
   background: transparent;
   color: inherit;
   font-size: .8125rem;
@@ -113,7 +95,7 @@
   margin-inline-start: 8px;
   padding: 3px 8px;
   border: 1px solid currentColor;
-  border-radius: 6px;
+  border-radius: var(--roxol-radius);
   color: inherit;
   font-size: .875rem;
   font-weight: 500;
@@ -160,7 +142,7 @@
   gap: 6px;
   min-height: 26px;
   padding: 3px 7px;
-  border-radius: 6px;
+  border-radius: var(--roxol-radius);
   color: var(--roxol-ink);
   font: inherit;
 }
@@ -201,21 +183,17 @@
   min-height: 23px;
   min-width: 23px;
   padding: 2px;
-  border-radius: 6px;
+  border-radius: var(--roxol-radius);
 }
 .roxol-card-overlay .roxol-history-trigger { font-size: 0; gap: 0; }
 .roxol-card-overlay .roxol-card-control { position: absolute; }
 .roxol-market.roxol-card-overlay .roxol-card-demand {
   top: 3px;
   left: 3px;
-  background: #e1e3e8;
-  color: #292f3c;
+  background: var(--roxol-selected);
+  color: var(--roxol-ink);
   border-color: transparent;
 }
-.roxol-card-overlay .roxol-card-demand[data-demand="amazing"] { background: #ffe082; color: #533708; }
-.roxol-card-overlay .roxol-card-demand[data-demand="high"] { background: #e9d5ff; color: #5e2389; }
-.roxol-card-overlay .roxol-card-demand[data-demand="normal"] { background: #c2efd1; color: #185239; }
-.roxol-card-overlay .roxol-card-demand:is([data-demand="low"], [data-demand="terrible"]) { background: #ffd5d1; color: #851d22; }
 .roxol-card-overlay .roxol-card-state { top: 3px; right: 29px; }
 .roxol-card-overlay .roxol-button.roxol-card-copy {
   bottom: 3px;
@@ -240,7 +218,7 @@
   max-width: min(285px, calc(100vw - 12px));
   padding: 5px 8px;
   border: 1px solid var(--roxol-line);
-  border-radius: 6px;
+  border-radius: var(--roxol-radius);
   background: var(--roxol-paper);
   color: var(--roxol-ink);
   white-space: pre-line;
@@ -295,10 +273,10 @@
   gap: 2px 8px;
   max-width: 100%;
   padding: 6px 10px;
-  border: 1px solid light-dark(#b9bfca, #5b6473);
-  border-radius: 9px;
-  background: light-dark(#f3f5f8, #262b34);
-  color: light-dark(#343b47, #e2e7ef);
+  border: 1px solid var(--roxol-line);
+  border-radius: var(--roxol-radius);
+  background: var(--roxol-paper);
+  color: var(--roxol-ink);
   font-size: 1rem;
   line-height: 1.35;
   font-variant-numeric: tabular-nums;
@@ -308,16 +286,6 @@
 .roxol-trade-chip-label { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
 .roxol-trade-chip-label .roxol-icon { width: 1em; height: 1em; margin: 0; }
 .roxol-trade-chip strong { color: inherit; font-weight: 700; }
-.roxol-trade-comparison .roxol-trade-chip[data-direction="up"] {
-  border-color: light-dark(#80b597, #487a63);
-  background: light-dark(#e8f6ed, #1b382c);
-  color: light-dark(#135633, #a9ecc1);
-}
-.roxol-trade-comparison .roxol-trade-chip[data-direction="down"] {
-  border-color: light-dark(#d59a9f, #915760);
-  background: light-dark(#fceef0, #46262c);
-  color: light-dark(#892735, #ffc0ca);
-}
 .roxol-market-symbol {
   display: inline-block;
   flex: none;
@@ -417,7 +385,7 @@
 }
 
 .roxol-market .roxol-link {
-  color: var(--roxol-accent);
+  color: var(--roxol-ink);
   text-decoration: underline;
   text-underline-offset: .18em;
   overflow-wrap: anywhere;
@@ -447,9 +415,9 @@
   padding: 11px;
   overflow: auto;
   overscroll-behavior: contain;
-  border: 1px solid var(--roxol-sale-line);
+  border: 1px solid var(--roxol-line);
   border-radius: 12px;
-  background: var(--roxol-sale-surface);
+  background: var(--roxol-paper);
   color: var(--roxol-ink);
   box-shadow: 0 8px 28px rgb(0 0 0 / .28);
   font-size: 13px;
@@ -465,22 +433,12 @@
   font-weight: 700;
 }
 .roxol-sales-preview .roxol-metrics { color: var(--roxol-muted); }
-.roxol-sales-preview, .roxol-sales-dialog {
-  --roxol-sale-surface: light-dark(#fff, #202126);
-  --roxol-sale-elevated: light-dark(#f2f3f5, #2b2d34);
-  --roxol-sale-line: light-dark(#d5d7dd, #4a4e58);
-  --roxol-sale-up: light-dark(#198142, #58db83);
-  --roxol-sale-down: light-dark(#c13142, #ff707b);
-  --roxol-sale-neutral: light-dark(#777d89, #a4a9b4);
-}
-:is(.roxol-sales-preview, .roxol-sales-dialog) .roxol-button { background: var(--roxol-sale-surface); border-color: var(--roxol-sale-line); }
-:is(.roxol-sales-preview, .roxol-sales-dialog) .roxol-button:is(:hover, [aria-pressed="true"]) { background: var(--roxol-sale-elevated); }
 .roxol-sale-median-summary {
   margin: 8px 0;
   padding: 5px 8px;
-  border: 1px solid var(--roxol-sale-line);
+  border: 1px solid var(--roxol-line);
   border-radius: 8px;
-  background: var(--roxol-sale-elevated);
+  background: var(--roxol-selected);
 }
 .roxol-sale-medians {
   width: 100%;
@@ -509,7 +467,7 @@
   color: var(--roxol-muted);
   font-size: 11px;
 }
-.roxol-sale-medians tbody tr:first-child { border-top: 1px solid var(--roxol-sale-line); }
+.roxol-sale-medians tbody tr:first-child { border-top: 1px solid var(--roxol-line); }
 .roxol-sale-medians tbody td:nth-child(2) { font-weight: 700; }
 .roxol-sale-medians small { display: block; font-weight: 400; }
 .roxol-sale-count { margin: 6px 0 4px; color: var(--roxol-muted); font-size: 12px; }
@@ -524,7 +482,7 @@
   align-items: center;
   gap: 5px;
   margin-inline-start: auto;
-  color: var(--roxol-sale-up);
+  color: var(--roxol-up);
   font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -535,7 +493,7 @@
   height: 5px;
   overflow: hidden;
   border-radius: 99px;
-  background: var(--roxol-sale-line);
+  background: var(--roxol-line);
 }
 .roxol-sale-share-bar::before {
   content: "";
@@ -546,9 +504,9 @@
 }
 .roxol-sale-legend { display: flex; flex-wrap: wrap; gap: 3px 11px; margin: 0 0 7px; font-size: 11px; }
 .roxol-sale-legend > span { display: inline-flex; align-items: center; gap: 4px; color: inherit; }
-.roxol-sale-mark, .roxol-sale-legend span { --roxol-sale-color: var(--roxol-sale-neutral); }
-.roxol-sale-mark[data-direction="up"], .roxol-sale-legend [data-direction="up"] { --roxol-sale-color: var(--roxol-sale-up); }
-.roxol-sale-mark[data-direction="down"], .roxol-sale-legend [data-direction="down"] { --roxol-sale-color: var(--roxol-sale-down); }
+.roxol-sale-mark, .roxol-sale-legend span { --roxol-sale-color: var(--roxol-muted); }
+.roxol-sale-mark[data-direction="up"], .roxol-sale-legend [data-direction="up"] { --roxol-sale-color: var(--roxol-up); }
+.roxol-sale-mark[data-direction="down"], .roxol-sale-legend [data-direction="down"] { --roxol-sale-color: var(--roxol-down); }
 .roxol-sale-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(21px, 1fr));
@@ -566,7 +524,7 @@
   background: transparent;
   cursor: pointer;
 }
-.roxol-sale-mark:hover, .roxol-sale-mark[data-active] { background: var(--roxol-sale-elevated); }
+.roxol-sale-mark:hover, .roxol-sale-mark[data-active] { background: var(--roxol-selected); }
 .roxol-sale-mark::before, .roxol-sale-legend span::before {
   content: "";
   width: 10px;
@@ -587,9 +545,9 @@
   justify-content: space-between;
   gap: 5px 10px;
   padding: 8px;
-  border: 1px solid var(--roxol-sale-line);
+  border: 1px solid var(--roxol-line);
   border-radius: 8px;
-  background: var(--roxol-sale-surface);
+  background: var(--roxol-paper);
   box-shadow: 0 4px 18px rgb(0 0 0 / .22);
   font-size: 12px;
   pointer-events: none;
@@ -609,7 +567,9 @@
 .roxol-dialog h2 {
   margin: 0 0 8px;
   color: var(--roxol-ink);
-  font: 400 22px/1.2 Georgia, serif;
+  font: inherit;
+  font-size: 1.125rem;
+  font-weight: 700;
   overflow-wrap: anywhere;
 }
 
@@ -646,7 +606,7 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
 .roxol-profile .roxol-profile-pill:hover { filter: brightness(.88); text-decoration: underline; }
 .roxol-inventory-totals { display: flex; flex-wrap: wrap; gap: 5px 14px; }
 .roxol-player-badges { margin-top: 12px; padding-top: 9px; border-top: 1px solid var(--roxol-line); }
-.roxol-player-badges h3 { margin: 0 0 7px; font: 600 14px/1.4 "Trebuchet MS", sans-serif; }
+.roxol-player-badges h3 { margin: 0 0 7px; font: inherit; font-weight: 600; }
 .roxol-player-badge-icon { display: block; object-fit: contain; }
 
 .roxol-market.roxol-dialog {
@@ -657,21 +617,19 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
   margin: auto;
   padding: 0;
   border: 1px solid var(--roxol-line);
-  border-top: 4px solid var(--roxol-accent);
-  border-radius: 6px;
+  border-radius: var(--roxol-radius);
   background: var(--roxol-paper);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
-.roxol-dialog::backdrop { background: rgb(10 16 13 / .55); }
+.roxol-dialog::backdrop { background: rgb(0 0 0 / .55); }
 .roxol-market.roxol-sales-dialog {
   width: min(850px, calc(100% - 24px));
-  border: 1px solid var(--roxol-sale-line);
+  border: 1px solid var(--roxol-line);
   border-radius: 12px;
-  background: var(--roxol-sale-surface);
+  background: var(--roxol-paper);
 }
-.roxol-sales-dialog .roxol-dialog-header { border-color: var(--roxol-sale-line); }
 .roxol-dialog-header { display: flex; align-items: start; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--roxol-line); }
 .roxol-dialog-header h2 { margin: 0; }
 .roxol-dialog-body { padding: 12px 16px 16px; }
@@ -685,6 +643,126 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
 .roxol-table td .roxol-item { max-width: 260px; }
 .roxol-load-more { margin-top: 9px; }
 
+
+/* Trading components. Use inside .roxol-market to inherit theme and typography. */
+.roxol-trading-heading,
+.roxol-trading-subheading,
+.roxol-basket-heading {
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+}
+.roxol-trading-heading { font-size: 1rem; }
+.roxol-trading-subheading { font-size: .875rem; }
+
+.roxol-number, .roxol-stat-grid dd { font-variant-numeric: tabular-nums; }
+.roxol-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  margin: 0;
+}
+.roxol-stat-grid dt { color: var(--roxol-muted); font-size: var(--roxol-text-small); font-weight: 400; }
+.roxol-stat-grid dd { margin: 0; font-weight: 600; }
+.roxol-stat-grid > div { min-inline-size: 0; overflow-wrap: anywhere; }
+
+.roxol-segments {
+  display: inline-flex;
+  max-inline-size: 100%;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--roxol-line);
+  border-radius: var(--roxol-radius);
+}
+.roxol-market .roxol-segments .roxol-button {
+  min-height: 26px;
+  padding-inline: 8px;
+  border: 0;
+  background: transparent;
+  font-size: var(--roxol-text-small);
+  font-weight: 600;
+}
+.roxol-market .roxol-segments .roxol-button:hover,
+.roxol-market .roxol-segments .roxol-button[aria-pressed="true"] { background: var(--roxol-selected); }
+
+.roxol-disclosure > summary {
+  display: list-item;
+  padding-block: 5px;
+  cursor: pointer;
+  font-size: var(--roxol-text-small);
+  font-weight: 600;
+}
+.roxol-disclosure > summary:hover { text-decoration: underline; }
+.roxol-loading-status:is([aria-busy="true"], [data-loading])::before {
+  content: "";
+  display: inline-block;
+  width: .85em;
+  height: .85em;
+  margin-inline-end: .5em;
+  border: 1px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  vertical-align: -.05em;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .roxol-loading-status:is([aria-busy="true"], [data-loading])::before { animation: roxol-spin .8s linear infinite; }
+}
+@keyframes roxol-spin { to { rotate: 1turn; } }
+.roxol-progress-bar {
+  display: block;
+  inline-size: 100%;
+  block-size: 5px;
+  border: 0;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--roxol-selected);
+  appearance: none;
+}
+.roxol-progress-bar::-webkit-progress-bar { background: var(--roxol-selected); }
+.roxol-progress-bar::-webkit-progress-value { background: var(--roxol-muted); border-radius: 3px; }
+
+.roxol-basket-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.roxol-trade-basket { min-inline-size: 0; padding-inline: 10px; }
+.roxol-trade-basket:first-child { padding-inline-start: 0; }
+.roxol-trade-basket:last-child { padding-inline-end: 0; }
+.roxol-trade-basket + .roxol-trade-basket { border-inline-start: 1px solid var(--roxol-line); }
+.roxol-basket-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  padding-block: 4px;
+  border-bottom: 1px solid var(--roxol-line);
+  font-size: var(--roxol-text-small);
+  overflow-wrap: anywhere;
+}
+.roxol-basket-heading strong { font-size: .875rem; }
+.roxol-basket-items { list-style: none; margin: 0; padding: 0; }
+.roxol-basket-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(4ch, auto);
+  align-items: center;
+  gap: 6px;
+  padding-block: 4px;
+  min-block-size: 36px;
+  font-size: var(--roxol-text-small);
+}
+.roxol-basket-item + .roxol-basket-item { border-top: 1px solid var(--roxol-line); }
+.roxol-basket-thumbnail {
+  display: grid;
+  place-items: center;
+  inline-size: 28px;
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: var(--roxol-selected);
+}
+.roxol-basket-thumbnail img { inline-size: 100%; aspect-ratio: 1; object-fit: contain; }
+.roxol-basket-name { overflow-wrap: anywhere; }
+.roxol-basket-value { text-align: end; font-weight: 600; }
+.roxol-basket-value small, .roxol-valuation-table small { display: block; font: inherit; font-size: .917em; font-weight: 400; }
+
+.roxol-market.roxol-trade-history { width: min(760px, calc(100% - 20px)); }
+.roxol-trade-history .roxol-dialog-body { container-type: inline-size; }
 .roxol-trade-history .roxol-dialog-header {
   position: sticky;
   top: 0;
@@ -695,123 +773,94 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 4px 8px;
 }
 .roxol-history-actions { justify-content: space-between; }
-.roxol-history-note { color: var(--roxol-muted); }
-.roxol-history-actions + .roxol-history-note { margin: 8px 0 10px; }
-.roxol-history-status { flex: 1 1 120px; text-align: center; }
-.roxol-history-records { display: grid; gap: 10px; margin-top: 12px; }
-.roxol-history-record { overflow: hidden; border: 1px solid var(--roxol-line); border-radius: 6px; }
+.roxol-history-note, .roxol-history-status, .roxol-history-caption {
+  color: var(--roxol-muted);
+  font-size: var(--roxol-text-small);
+}
+.roxol-history-actions + .roxol-history-note { margin: 6px 0 8px; }
+.roxol-history-status { flex: 1 1 140px; text-align: center; }
+.roxol-history-records { margin-top: 8px; }
+.roxol-history-record { border-top: 1px solid var(--roxol-line); padding-block: 6px; }
 .roxol-history-caption {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 4px 12px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--roxol-line);
-  background: color-mix(in srgb, var(--roxol-accent) 9%, var(--roxol-paper));
+  gap: 2px 10px;
+  margin-bottom: 4px;
   font-variant-numeric: tabular-nums;
 }
-.roxol-history-inferred { margin-inline-start: auto; font-weight: 600; }
-.roxol-history-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.roxol-history-side { min-width: 0; padding: 8px 10px; overflow-wrap: anywhere; }
-.roxol-history-side + .roxol-history-side { border-inline-start: 1px solid var(--roxol-line); }
-.roxol-history-side-label { margin: 0 0 4px; color: var(--roxol-muted); font: inherit; font-weight: 600; }
-.roxol-history-items { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.roxol-history-target { color: var(--roxol-accent); font-weight: 700; }
-.roxol-history-metrics { font-size: .92em; font-variant-numeric: tabular-nums; }
-
-@media (max-width: 480px) {
-  .roxol-dialog .roxol-button { min-height: 34px; }
-  .roxol-dialog-body, .roxol-dialog-header { padding-inline: 10px; }
-  .roxol-dialog .roxol-table { font-size: 12px; }
+.roxol-history-caption span { font-weight: 600; }
+.roxol-history-comparison {
+  padding-block: 5px;
+  border-top: 1px solid var(--roxol-line);
 }
+.roxol-history-comparison > div { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; }
+.roxol-history-details > summary { padding-block: 3px; }
+.roxol-history-tables { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-block-end: 4px; }
+.roxol-valuation-table { font-size: var(--roxol-text-small); table-layout: fixed; }
+.roxol-valuation-table caption { text-align: start; font-weight: 600; }
+.roxol-valuation-table th:first-child { width: 50%; }
+.roxol-valuation-table :is(th, td) { padding-block: 4px; }
+.roxol-valuation-table :is(th, td):not(:first-child) { text-align: end; }
 
 .roxol-overpay {
+  container-type: inline-size;
   background: var(--roxol-paper);
   border: 1px solid var(--roxol-line);
-  border-block-start: 2px solid var(--roxol-accent);
-  border-radius: 6px;
+  border-radius: var(--roxol-radius);
   margin-block: 8px;
-  padding: 12px;
+  padding: 8px 10px 4px;
   max-inline-size: 100%;
   min-inline-size: 0;
-  overflow-wrap: anywhere;
 }
-
-.roxol-overpay-header, .roxol-overpay-filter {
+.roxol-overpay-header {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 10px;
-}
-
-.roxol-overpay-header { justify-content: space-between; }
-.roxol-overpay-header .roxol-link { color: var(--roxol-accent); }
-.roxol-overpay-heading { margin: 0; color: inherit; font: 700 1.16em/1.2 Georgia, serif; }
-.roxol-overpay-filter { margin-block: 10px; }
-
-.roxol-overpay-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px 12px;
-  margin: 0;
-  padding-block: 8px;
-  border-block: 1px solid var(--roxol-line);
-}
-
-.roxol-overpay-stats dt, .roxol-overpay-caption, .roxol-overpay-note {
-  color: var(--roxol-muted);
-  font-size: .86em;
-  font-weight: 400;
-}
-
-.roxol-overpay-stats dd { margin: 0; font-weight: 700; }
-.roxol-overpay-figure, .roxol-overpay-stats dd { font-variant-numeric: tabular-nums; }
-.roxol-overpay-note { margin: 7px 0 0; }
-.roxol-overpay-progress {
-  display: grid;
-  gap: 8px;
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-}
-.roxol-overpay-progress li {
-  display: flex;
-  flex-wrap: wrap;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 2px 8px;
-  font-size: .86em;
-  font-variant-numeric: tabular-nums;
+  gap: 6px;
+  margin-bottom: 5px;
 }
-.roxol-overpay-progress li > :first-child { font-weight: 700; }
-.roxol-overpay-progress progress {
-  flex: 1 0 100%;
-  block-size: 5px;
-  accent-color: var(--roxol-accent);
+.roxol-overpay-header .roxol-link { font-size: var(--roxol-text-small); }
+.roxol-overpay-rate { margin-block: 7px; }
+.roxol-stat-grid-primary { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 3px; }
+.roxol-stat-grid-primary dd { font-size: .875rem; }
+.roxol-stat-grid-primary dd .roxol-number { font-size: 1rem; }
+.roxol-overpay-caption, .roxol-overpay-note, .roxol-overpay-progress {
+  color: var(--roxol-muted);
+  font-size: var(--roxol-text-small);
 }
-.roxol-overpay-estimate-status {
-  color: var(--roxol-accent);
-  margin: 7px 0;
-  font-weight: 700;
-}
-
-.roxol-overpay-list-heading { margin: 9px 0 1px; color: inherit; font: inherit; font-weight: 700; }
-.roxol-overpay-history { margin-block-start: 7px; }
-.roxol-overpay-history summary { display: list-item; cursor: pointer; color: var(--roxol-accent); }
+.roxol-overpay-note { margin: 4px 0; }
+.roxol-overpay-progress { margin: 6px 0 8px; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
+.roxol-overpay-progress .roxol-progress-bar { margin-top: 3px; }
+.roxol-overpay-details { border-top: 1px solid var(--roxol-line); }
+.roxol-overpay-details .roxol-stat-grid { margin-block: 3px 8px; }
+.roxol-overpay-details .roxol-button { margin-block: 3px 6px; }
 .roxol-overpay-history[open] .roxol-overpay-trades { max-block-size: 24rem; overflow: auto; }
 .roxol-overpay-trades, .roxol-overpay-basket { list-style: none; margin: 0; padding: 0; }
+.roxol-overpay-basket { overflow-wrap: anywhere; }
 .roxol-overpay-basket li { display: inline; }
 .roxol-overpay-basket li + li::before { content: " · "; }
-
 .roxol-overpay-trade {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  padding-block: 5px;
-  border-block-end: 1px solid var(--roxol-line);
+  gap: 8px;
+  padding-block: 4px;
+  border-bottom: 1px solid var(--roxol-line);
 }
+.roxol-overpay-trade-values { display: grid; align-content: center; text-align: end; font-weight: 600; }
+.roxol-overpay-trade-values > :last-child { font-size: var(--roxol-text-small); }
 
-.roxol-overpay-trade-values { display: grid; align-content: center; text-align: end; font-weight: 700; }
-.roxol-overpay-trade-values > :last-child { font-size: .86em; }
+@container (max-width: 390px) {
+  .roxol-stat-grid-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .roxol-trade-basket { padding-inline: 5px; }
+  .roxol-basket-item { gap: 4px; }
+  .roxol-basket-thumbnail { inline-size: 22px; }
+  .roxol-history-tables { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  .roxol-dialog .roxol-button { min-height: 32px; }
+  .roxol-dialog-body, .roxol-dialog-header { padding-inline: 10px; }
+}
