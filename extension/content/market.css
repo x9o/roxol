@@ -771,6 +771,9 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
 .roxol-overpay-figure, .roxol-overpay-stats dd { font-variant-numeric: tabular-nums; }
 .roxol-overpay-note { margin: 7px 0 0; }
 .roxol-overpay-list-heading { margin: 9px 0 1px; color: inherit; font: inherit; font-weight: 700; }
+.roxol-overpay-history { margin-block-start: 7px; }
+.roxol-overpay-history summary { display: list-item; cursor: pointer; color: var(--roxol-accent); }
+.roxol-overpay-history[open] .roxol-overpay-trades { max-block-size: 24rem; overflow: auto; }
 .roxol-overpay-trades, .roxol-overpay-basket { list-style: none; margin: 0; padding: 0; }
 .roxol-overpay-basket li { display: inline; }
 .roxol-overpay-basket li + li::before { content: " · "; }

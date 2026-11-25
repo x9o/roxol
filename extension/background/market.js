@@ -8,6 +8,9 @@
   const tradeHistoryCache = new Map();
   const tradeProfileCache = new Map();
   const overpayCache = new Map();
+  const overpayStorageKey = "overpay-samples-v1";
+  let saveSamples = Promise.resolve();
+  let tradeProfilesRetryAt = 0;
   const listingCache = new Map();
   const playerCache = new Map();
   const catalogUrl = "https://catalog.roblox.com/v1/catalog/items/details";
@@ -47,7 +50,8 @@
             signal,
           });
           const data = response.ok ? await response[format]() : null;
-          return { status: response.status, data, csrf: response.headers.get("x-csrf-token") };
+          return { status: response.status, data, csrf: response.headers.get("x-csrf-token"),
+            retryAfter: response.headers.get("retry-after") };
         },
       });
       dispatchRequests();
@@ -261,33 +265,42 @@
     }));
   }
 
-  async function fetchTradeHistory(assetId, page) {
-    const url = `https://routility.io/web/item-trades/${assetId}?kind=trade&range=all&limit=${tradePageSize}&page=${page}`;
+  async function fetchTradeHistory(assetId, page, limit = tradePageSize) {
+    const url = `https://routility.io/web/item-trades/${assetId}?kind=trade&range=all&limit=${limit}&page=${page}`;
     const { data } = await request(url);
     const pages = data?.total === 0 && data?.pages === 0 ? 1 : data?.pages;
     if (!Array.isArray(data?.trades) || amount(data.total) == null ||
-        !amount(data.page) || !amount(pages) || data.page > pages) {
+        data.page !== page || !amount(pages) || data.page > pages ||
+        data.per_page !== limit || data.trades.length > limit ||
+        (page < pages && data.trades.length !== limit)) {
       return { status: "unavailable" };
     }
 
     const trades = new Map();
-    for (const row of data.trades) {
-      if (row?.kind !== "trade" || typeof row.trade_id !== "string" || !row.trade_id.trim()) continue;
+    const records = data.trades.map((row) => {
+      const id = row?.kind === "trade" && typeof row.trade_id === "string" && row.trade_id.trim()
+        ? row.trade_id : null;
+      const firstObservedAt = observedAt(row?.ts);
+      const record = { id, firstObservedAt, trade: null };
+      if (!id) return record;
       const sideA = tradeBasket(row.side_a_items);
       const sideB = tradeBasket(row.side_b_items);
-      if (!sideA.length || !sideB.length || ![...sideA, ...sideB].some((item) => item.assetId === assetId)) continue;
-      trades.set(row.trade_id, {
-        tradeId: row.trade_id,
-        firstObservedAt: observedAt(row.ts),
+      if (!sideA.length || !sideB.length || ![...sideA, ...sideB].some((item) => item.assetId === assetId)) return record;
+      record.trade = {
+        tradeId: id,
+        firstObservedAt,
         lastObservedAt: observedAt(row.ts_latest),
         inferred: typeof row.inferred === "boolean" ? row.inferred : null,
         sideA,
         sideB,
-      });
-    }
+      };
+      trades.set(id, record.trade);
+      return record;
+    });
     return {
       status: "ok", page: data.page, pages, total: data.total,
       checkedAt: new Date().toISOString(), trades: [...trades.values()],
+      ...(limit !== tradePageSize ? { records } : {}),
     };
   }
 
@@ -297,29 +310,48 @@
       fetchTradeHistory(assetId, page), 60, 2 * 60_000);
   }
 
-  function readTradeProfile(assetId, signal) {
+  function readTradeProfile(assetId, through) {
     const source = `https://www.rolimons.com/item/${assetId}`;
-    return cached(tradeProfileCache, assetId) || remember(tradeProfileCache, assetId,
-      request(source, { signal }, "text")
-        .then(({ data }) => data && RoxolTradeValuations.parseItemProfile(data, assetId, source, Date.now()))
-        .catch(() => null), 240, itemTTL);
+    const existing = cached(tradeProfileCache, assetId);
+    if (existing) return existing.then((profile) => {
+      if (!profile || profile.checkedAt >= through) return profile;
+      const latest = cached(tradeProfileCache, assetId);
+      return latest && latest !== existing ? latest : fetchProfile();
+    });
+    return fetchProfile();
+
+    function fetchProfile() {
+      if (Date.now() < tradeProfilesRetryAt) return Promise.resolve(null);
+      return remember(tradeProfileCache, assetId,
+        request(source, {}, "text")
+          .then(({ status, data, retryAfter }) => {
+            const now = Date.now();
+            if (status === 429) {
+              const retryAt = /^\d+$/.test(retryAfter) ? now + Number(retryAfter) * 1000 : Date.parse(retryAfter);
+              tradeProfilesRetryAt = Math.max(tradeProfilesRetryAt, retryAt > now ? retryAt : now + 60_000);
+            }
+            return data && RoxolTradeValuations.parseItemProfile(data, assetId, source, now);
+          })
+          .catch(() => null), 1000, itemTTL);
+    }
   }
 
   async function fetchOverpay(assetId) {
-    const history = await readTradeHistory(assetId, 1);
-    if (history.status !== "ok") return { status: "unavailable" };
-    const now = Date.now();
-    const trades = history.trades.slice(0, tradePageSize).filter((trade) => {
-      const sides = [trade.sideA, trade.sideB];
-      const { valid, through } = RoxolTradeValuations.observationWindow(trade);
-      return valid && through <= now && RoxolItemOverpay.isolatedSide(sides, assetId) >= 0 &&
-        !RoxolItemOverpay.unusualComposition(sides);
+    const { [overpayStorageKey]: saved } = await chrome.storage.local.get(overpayStorageKey).catch(() => ({}));
+    const previous = saved?.find((entry) => entry.assetId === assetId)?.records ?? [];
+    const { records, ...result } = await RoxolOverpaySampling.sampleItem({
+      assetId, previous, readTradeProfile,
+      readPage: (page, limit) => fetchTradeHistory(assetId, page, limit),
     });
-    const ids = [...new Set(trades.flatMap((trade) => [...trade.sideA, ...trade.sideB].map(({ assetId }) => assetId)))];
-    const signal = AbortSignal.timeout(15_000);
-    const profiles = new Map(await Promise.all(ids.map(async (id) => [id, await readTradeProfile(id, signal)])));
-    const valued = RoxolTradeValuations.resolveTrades(trades, profiles);
-    return { status: "ok", groups: RoxolItemOverpay.itemPreview(valued, assetId, now) };
+    if (records) {
+      saveSamples = saveSamples.then(async () => {
+        const { [overpayStorageKey]: entries = [] } = await chrome.storage.local.get(overpayStorageKey);
+        const updated = [{ assetId, records }, ...entries.filter((entry) => entry.assetId !== assetId)];
+        await chrome.storage.local.set({ [overpayStorageKey]: updated.slice(0, 12) });
+      }).catch(() => {});
+      await saveSamples;
+    }
+    return result;
   }
 
   async function eligibility(id) {

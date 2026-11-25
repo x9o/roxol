@@ -17,6 +17,7 @@ const RoxolItemOverpay = (() => {
 
   const recentDays = 30;
   const thinBelow = 10;
+  const lowConfidenceBelow = 30;
   const imbalanceRatio = 2;
   const groups = ["swap", "upgrade", "downgrade"];
 
@@ -35,6 +36,8 @@ const RoxolItemOverpay = (() => {
     return {
       sampleSize: priced.length,
       thinSample: priced.length < thinBelow,
+      confidence: priced.length < thinBelow ? "insufficient" :
+        priced.length < lowConfidenceBelow ? "low" : "standard",
       valuationCoverage: {
         eligibleTrades: samples.length,
         pricedTrades: priced.length,
@@ -47,6 +50,7 @@ const RoxolItemOverpay = (() => {
       recency: {
         firstObservedAt: times[0] ?? null,
         lastObservedAt: times.at(-1) ?? null,
+        firstPricedObservationAt: pricedTimes[0] ?? null,
         lastPricedObservationAt: pricedTimes.at(-1) ?? null,
         daysSinceLastPriced: pricedTimes.length ? (now - Date.parse(pricedTimes.at(-1))) / 86_400_000 : null,
       },
@@ -102,17 +106,19 @@ const RoxolItemOverpay = (() => {
     return opposite.length === 1 && opposite[0].quantity === 1 ? "swap" : "downgrade";
   }
 
-  function itemPreview(trades, id, now) {
+  function previewSample(trade, id, time) {
+    return targetSample(trade, isolatedSide([trade.sideA, trade.sideB], id), time);
+  }
+
+  function itemPreview(records, id, now) {
     const samples = { swap: [], downgrade: [] };
-    for (const trade of trades) {
+    for (const { trade, sample } of records) {
       const sides = [trade.sideA, trade.sideB];
       const side = isolatedSide(sides, id);
       const opposite = sides[1 - side];
-      const time = Date.parse(trade.valuationAt);
-      const sample = targetSample(trade, side, time);
       samples[tradeGroup(opposite)].push({
         ...sample,
-        observedAt: trade.valuationAt,
+        observedAt: new Date(sample.time).toISOString(),
         inferred: trade.inferred,
         opposite: opposite.map(({ assetId, name, quantity }) => ({ assetId, name, quantity })),
       });
@@ -120,7 +126,7 @@ const RoxolItemOverpay = (() => {
     return Object.fromEntries(Object.entries(samples).map(([group, entries]) => [
       group, {
         summary: summarize(entries, now),
-        recent: entries.sort((a, b) => b.time - a.time).slice(0, 5),
+        history: entries.sort((a, b) => b.time - a.time),
       },
     ]));
   }
@@ -172,7 +178,8 @@ const RoxolItemOverpay = (() => {
     };
   }
 
-  return { assetCopies, percentile, itemOverpay, itemPreview, isolatedSide, unusualComposition };
+  return { assetCopies, percentile, itemOverpay, itemPreview, previewSample, isolatedSide,
+    unusualComposition, tradeGroup, recentDays };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = RoxolItemOverpay;

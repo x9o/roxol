@@ -44,9 +44,12 @@ node tools/overpay/resolve-trades.mjs trades.json valued-trades.json
 node tools/overpay/resolve-trades.mjs trades.json valued-trades.json --completed pilot.json
 node tools/overpay/validate-trades.mjs trades.json pilot.json audit.json
 node tools/overpay/item-overpay.test.mjs
+node tools/overpay/overpay-sampling.test.mjs
 ```
 
 Open `itemOverpay.items[assetId]` in the valuation report. Each group's `recent` window covers the last 30 days and `allObserved` covers observations supplied in the input. Exported pages determine how much of each window is represented.
+
+The Marketplace sampler uses RoUtility's newest-first first-observation order to stop at the 30-day boundary. Its fixtures exercise the priced targets, raw cap, date boundary, sparse histories, confidence thresholds, and refreshes that reuse cached trades and historical prices. The standalone valuation report works from the supplied export and uses the end of each observation interval for its recent window.
 
 - OP is historical item value received minus historical item value given. Percentage OP divides each trade's difference by the focal item's historical value before calculating the distribution. For a swap, the perspective gives the focal item. For an upgrade, it receives the focal item alone. For a downgrade, it gives the focal item alone. One-for-many trades contribute once to each perspective for the isolated item, so their signs mirror each other and their counts describe the same trades.
 - Each window reports the median, the 25th and 75th percentiles using linear interpolation, and their difference (IQR) for both OP and percentage OP. Empty groups return null statistics. Groups with fewer than ten fully priced trades are labeled thin. Recency includes the first and last eligible observation, the latest priced observation, and its age in days.

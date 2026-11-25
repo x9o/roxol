@@ -2,6 +2,7 @@ const RoxolOverpay = (() => {
   const ui = RoxolMarketUI;
   const { element } = ui;
   const signed = new Intl.NumberFormat(undefined, { signDisplay: "exceptZero", maximumFractionDigits: 1 });
+  const spread = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
   const percent = new Intl.NumberFormat(undefined, {
     style: "percent", signDisplay: "exceptZero", maximumFractionDigits: 1,
   });
@@ -55,32 +56,42 @@ const RoxolOverpay = (() => {
     return row;
   }
 
-  function renderGroup(body, { summary, recent }) {
-    const { sampleSize, thinSample, recency, valuationCoverage, overpay, overpayPercent } = summary;
-    const { firstObservedAt, lastObservedAt } = recency;
-    const dates = firstObservedAt && lastObservedAt
-      ? date.formatRange(new Date(firstObservedAt), new Date(lastObservedAt)) : "—";
+  function renderGroup(body, { summary, history }) {
+    const { sampleSize, confidence, recency, valuationCoverage, overpay, overpayPercent } = summary;
+    const { firstPricedObservationAt, lastPricedObservationAt } = recency;
+    const dates = sampleSize
+      ? date.formatRange(new Date(firstPricedObservationAt), new Date(lastPricedObservationAt)) : "—";
     const medianPercent = overpayPercent.median == null ? null : overpayPercent.median / 100;
     const stats = element("dl", "roxol-overpay-stats");
     stats.append(
       stat("Median OP", figure(overpay.median, signed)),
       stat("Median OP %", figure(medianPercent, percent)),
+      stat("OP interquartile range", overpay.iqr == null ? "—" : spread.format(overpay.iqr)),
       stat("Priced trades", `${ui.format(sampleSize)} of ${ui.format(valuationCoverage.eligibleTrades)}`),
-      stat("Observed dates (UTC)", dates),
+      stat("Priced dates (UTC)", dates),
     );
     body.replaceChildren(stats);
-    if (!recent.length) {
-      body.append(element("p", "roxol-overpay-note", "No eligible trades of this type in the sample."));
-      return;
+    if (confidence !== "standard") {
+      body.append(element("p", "roxol-overpay-note", confidence === "insufficient"
+        ? "Insufficient sample (fewer than 10 priced trades)."
+        : "Low confidence (fewer than 30 priced trades)."));
     }
-    if (thinSample) {
-      body.append(element("p", "roxol-overpay-note", sampleSize
-        ? "Small sample · fewer than 10 priced trades."
-        : "Historical values were unavailable for these trades."));
-    }
+    if (!history.length) return;
     const list = element("ul", "roxol-overpay-trades");
-    list.append(...recent.map(tradeRow));
+    list.append(...history.slice(0, 5).map(tradeRow));
     body.append(element("h3", "roxol-overpay-list-heading", "Recent trades"), list);
+    if (history.length <= 5) return;
+    const disclosure = element("details", "roxol-overpay-history");
+    const toggle = element("summary", "", `Show full sampled history (${ui.format(history.length)} trades)`);
+    disclosure.append(toggle);
+    disclosure.addEventListener("toggle", () => {
+      toggle.textContent = disclosure.open ? "Hide older trades" : `Show full sampled history (${ui.format(history.length)} trades)`;
+      if (!disclosure.open || disclosure.querySelector("ul")) return;
+      const older = element("ul", "roxol-overpay-trades");
+      older.append(...history.slice(5).map(tradeRow));
+      disclosure.append(older);
+    });
+    body.append(disclosure);
   }
 
   function mount(assetId) {
@@ -99,11 +110,11 @@ const RoxolOverpay = (() => {
         return;
       }
       const { swap, downgrade } = data.groups;
-      if (!swap.recent.length && !downgrade.recent.length) {
-        status.textContent = "No eligible trades in RoUtility’s latest 20 tracked trades.";
-        return;
-      }
-      status.remove();
+      const notices = [];
+      if (data.partial) notices.push("RoUtility history could only be partially refreshed.");
+      if (data.pricingIncomplete) notices.push("Some Rolimon’s profiles were unavailable during pricing.");
+      if (notices.length) status.textContent = notices.join(" ");
+      else status.remove();
       const filter = element("div", "roxol-overpay-filter");
       filter.setAttribute("role", "group");
       filter.setAttribute("aria-label", "Trade type");
@@ -118,9 +129,9 @@ const RoxolOverpay = (() => {
         filter.append(button);
       }
       const note = element("p", "roxol-overpay-note",
-        "Sample of up to 20 tracked trades. OP is the value received minus the value of this item, using historical Rolimon’s Value or RAP. Robux side payments are unknown.");
+        "Last 30 days of first observations, up to 500 tracked records. OP is the value received minus this item’s value, using historical Rolimon’s Value or RAP. Robux side payments are unknown.");
       panel.append(filter, body, note);
-      select(downgrade.recent.length ? downgrade : swap);
+      select(downgrade.history.length ? downgrade : swap);
     });
 
     return panel;

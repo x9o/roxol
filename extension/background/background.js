@@ -1,6 +1,6 @@
 importScripts(
   "../shared/market_targets.js", "../shared/trades.js", "../vendor/nevos/nte_sales_core.js",
-  "../shared/trade-valuations.js", "../shared/item-overpay.js",
+  "../shared/trade-valuations.js", "../shared/item-overpay.js", "../shared/overpay-sampling.js",
   "../vendor/nevos/rolimons_item_details.js", "rolimons.js", "market.js",
 );
 
