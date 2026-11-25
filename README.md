@@ -21,7 +21,7 @@ Roxol is a Chrome and Edge extension for Roblox limited items and trading. It us
 - **Per-item USD estimates** from RoUtility where available, with a separate optional estimate using a user-entered rate and live Rolimon's value.
 - **Mass Trade Sender** with offer selection, manual recipient entry, a review queue, progress tracking, and native trade forms for manual sending. Owner discovery is planned once the data is verified.
 
-- **Expanded overpay analytics** with more proof coverage, a RoPost cross-check, and sales-based lookback windows. The [pilot plan](OVERPAY_ANALYTICS_PLAN.md) records the evidence criteria and potential data sources.
+- **Expanded overpay analytics** with a primary benchmark based on verified proofs and their submitted totals. Complete Rolimon's historical pricing will support a cross-check. More proof coverage, a RoPost cross-check, and sales-based lookback windows are also planned. See the [overpay analytics plan](OVERPAY_ANALYTICS_PLAN.md).
 
 **Ideas under consideration** include a **Might drop** forecast that tracks sustained pressure below a value threshold, plus buy, sell, and trade calculators that account for volume, liquidity, outliers, and sparse or stale data.
 
