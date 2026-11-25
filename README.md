@@ -19,6 +19,16 @@ Roxol is a Chrome and Edge extension for Roblox limited items and trading. It us
 - **Per-item USD estimates** from RoUtility where available, with a separate optional estimate using a user-entered rate and live Rolimon's value.
 - **Mass Trade Sender** with offer selection, manual recipient entry, a review queue, progress tracking, and native trade forms for manual sending. Owner discovery is planned once the data is verified.
 
+- **Overpay (OP) analytics** on item pages and trade analysis views. Display median and mean observed OP, typical ranges, sample sizes, recent trends and source proofs, separating upgrades and downgrades. Prefer trades where the target item is isolated on one side, using values at the time of the trade where available.
+
+### Overpay analytics: proposed data sources
+
+1. **Discord value requests:** Investigate authorized collection of Rolimon's value-request messages and proof attachments, extracting structured trade records (including OCR if needed) into a searchable database. Submitted and reviewed proofs are the preferred evidence, but obtaining reliable access and building the dataset may be difficult.
+2. **Rolimon's / RoPost API:** Investigate whether either service offers authorized access to proof data. RoPost's Discord bot already supports item-specific proof searches, making it the main lead; its underlying data source and retrieval method are unknown. A suitable public API may not exist.
+3. **RoUtility API:** Practical alternative if structured proof data is inaccessible. Use available tracked trades and investigate configurable value-imbalance thresholds to exclude probable USD purchases and other anomalous exchanges. Thresholds cannot reliably identify all off-platform payments and may exclude legitimate trades, so label these statistics as inferred rather than proof-backed and keep them separate from verified-proof analytics.
+
+No source or implementation has been selected yet. Verify API availability, access permissions, historical values, duplicate handling and sample quality before implementation. Submitted proofs may also have selection bias.
+
 **Ideas under consideration** include a **Might drop** forecast that tracks sustained pressure below a value threshold, plus buy, sell, and trade calculators that account for volume, liquidity, outliers, and sparse or stale data.
 
 ## Load locally
