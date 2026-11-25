@@ -10,7 +10,7 @@ Roxol is a Chrome and Edge extension for Roblox limited items and trading. It us
 - **Trade comparisons** on selected trades and send and counter forms. Each offer shows its Rolimon's total below the native total, which is labeled `(RAP)`. The Rolimon's total uses the same item fallbacks and Robux amounts as the value comparison. Limited-item cards show Roblox RAP, Rolimon's value or a labeled RAP fallback, demand or average daily sales, state, and sales history where available. Centered badges between the offers show signed RAP and value changes, with Robux and Rolimon's icons and green and red indicators for gains and losses.
 - **Overpay** on limited Marketplace asset pages. Compare raw trade statistics and filtered market-rate estimates for one-for-one and one-for-many RoUtility exchanges, with pricing coverage, confidence, and a downloadable sample audit.
 - **Item trade history** from RoUtility. Select **View trades** on a Roblox Marketplace asset page to compare item baskets, reported totals, and overpay side by side. Expand a record for its observation details, RAP, and Value. A local report resolves historical Rolimon's valuations and gives per-item swap, upgrade, and downgrade overpay statistics for exported trades.
-- **Reference links** to Rolimon's item, bundle, sales, and player pages.
+- **Reference links** to Rolimon's item, bundle, sales, and player pages. Trade offers and the inventory picker show an external link beside each item's Rolimon's value.
 - **Toolbar popup and settings** with Roblox sign-in status, Trades tab detection, an **Open Trades** shortcut, and a saved system, light, or dark appearance preference.
 
 ## Planned features

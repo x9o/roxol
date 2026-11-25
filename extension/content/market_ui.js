@@ -690,7 +690,7 @@ const RoxolMarketUI = (() => {
     });
   }
 
-  function itemPanel(item, { card = false, cardOverlay, nativeLabel, getBestPrice, onRap } = {}) {
+  function itemPanel(item, { card = false, cardOverlay, nativeLabel, getBestPrice, onRap, linkValue = false } = {}) {
     const panel = element("div", `roxol-market roxol-item ${card ? "roxol-card" : "roxol-item-detail clearfix item-info-row-container"}`);
     panel.dataset.roxolItem = keyOf(item);
     panel.setAttribute("role", "group");
@@ -728,6 +728,16 @@ const RoxolMarketUI = (() => {
         value.figure.textContent = `${format(result.amount)} (${result.label})`;
         value.row.title = `${meta?.rap != null || meta?.fallbackValue != null ? "Rolimon’s" : "Roblox"} ${result.label} · no assigned value`;
       }
+    }
+    if (linkValue) {
+      const itemLink = titleLink("View item on Rolimon’s", rolimonsItemUrl(item));
+      itemLink.classList.add("roxol-value-link");
+      itemLink.textContent = "↗";
+      for (const event of ["pointerdown", "keydown"]) {
+        itemLink.addEventListener(event, (event) => event.stopPropagation());
+      }
+      value.figure.classList.add("roxol-value-with-link");
+      value.figure.append(itemLink);
     }
 
     const actions = element("div", "roxol-actions");
@@ -846,7 +856,7 @@ const RoxolMarketUI = (() => {
   // Vaulted until the copy ID control can reliably copy the correct ID.
   const showCardCopyId = false;
 
-  function mountCard(card, item, { nativeLabel = "Roblox RAP", priceIsRap = false } = {}) {
+  function mountCard(card, item, { nativeLabel = "Roblox RAP", priceIsRap = false, linkValue = false } = {}) {
     const image = card.querySelector("img");
     const thumbnail = card.querySelector(thumbnailSelector) || (image?.parentElement !== card ? image?.parentElement : null);
     if (!thumbnail) return null;
@@ -861,9 +871,11 @@ const RoxolMarketUI = (() => {
       const label = item.serial ? `#${item.serial}` : /^\d+$/.test(item.copyId) ? `ID ${item.copyId}` : "Copy ID";
       overlay.append(cardBadge(`${item.serial ? `Serial #${item.serial}\n` : ""}Copy ID: ${item.copyId}`, null, "copy", label));
     }
-    const panel = itemPanel(item, { card: true, cardOverlay: overlay, nativeLabel: nativePrice ? null : nativeLabel });
+    const panel = itemPanel(item, { card: true, cardOverlay: overlay, nativeLabel: nativePrice ? null : nativeLabel, linkValue });
     const anchor = price || name;
-    if (anchor && !thumbnail.contains(anchor)) anchor.after(panel);
+    const nativeWrapper = linkValue && (anchor || card).closest("a, button");
+    if (nativeWrapper) nativeWrapper.after(panel);
+    else if (anchor && !thumbnail.contains(anchor)) anchor.after(panel);
     else card.append(panel);
     // Roblox uses clickable tiles in the picker and sometimes wraps the thumbnail in a link.
     overlay.addEventListener("click", (event) => {
@@ -899,7 +911,9 @@ const RoxolMarketUI = (() => {
       price.setAttribute("aria-label", `${label}: ${priceText.trim()}${units}`);
     }
     return {
-      valid: () => panel.isConnected && card.contains(panel) && thumbnail.isConnected &&
+      valid: () => panel.isConnected && (nativeWrapper
+        ? nativeWrapper.isConnected && panel.parentElement === nativeWrapper.parentElement : card.contains(panel)) &&
+        thumbnail.isConnected &&
         (anchored ? overlay.previousElementSibling === link : overlay.parentElement === thumbnail) &&
         card.querySelector(cardPriceSelector) === price && price?.textContent === priceText,
       remove() {

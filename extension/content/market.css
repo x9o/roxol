@@ -86,6 +86,20 @@
   line-height: 1;
 }
 .roxol-title-link:is(:visited, :hover, :focus-visible) { color: inherit; }
+.roxol-value-with-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .3em;
+  white-space: nowrap;
+}
+.roxol-value-link {
+  width: 1em;
+  height: 1em;
+  margin: 0;
+  font: 700 .9em/1 system-ui, sans-serif;
+  color: inherit;
+  text-decoration: none;
+}
 .roxol-profile-title-link { flex: none; margin-inline-start: 0; font-size: 1.125rem; }
 .roxol-view-trades {
   display: inline-flex;

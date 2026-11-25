@@ -313,7 +313,7 @@
     }
     for (const [card, item] of byCard) {
       if (widgets.has(card)) continue;
-      const widget = ui.mountCard(card, item, { priceIsRap: true });
+      const widget = ui.mountCard(card, item, { priceIsRap: true, linkValue: true });
       if (widget) widgets.set(card, { widget, signature: JSON.stringify(item) });
     }
   }
