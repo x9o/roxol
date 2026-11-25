@@ -56,6 +56,12 @@ const RoxolRolimons = (() => {
     return Number.isSafeInteger(value) ? value : null;
   }
 
+  function readDailySales(html) {
+    const raw = /<h6\b[^>]*>\s*Avg Daily Sales\s*<\/h6>\s*<h5\b[^>]*>\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*<\/h5>/i.exec(html)?.[1];
+    const average = raw === undefined ? NaN : Number(raw.replaceAll(",", ""));
+    return Number.isFinite(average) ? average : null;
+  }
+
   function chartData(html) {
     const json = /\b(?:var|let|const)\s+item_sales\s*=\s*(\{[^<]*?\})\s*;/.exec(html)?.[1];
     if (!json) return null;
@@ -117,5 +123,5 @@ const RoxolRolimons = (() => {
     };
   }
 
-  return { itemIndex, readSales };
+  return { itemIndex, readDailySales, readSales };
 })();

@@ -4,6 +4,7 @@
   const resaleCache = new Map();
   const inventoryCache = new Map();
   const itemFeedCache = new Map();
+  const dailySalesCache = new Map();
   const salesCache = new Map();
   const tradeHistoryCache = new Map();
   const tradeProfileCache = new Map();
@@ -116,6 +117,16 @@
       request(rolimonsSalesUrl(item), {}, "text")
         .then(({ data }) => data ? RoxolRolimons.readSales(data) : { status: "unavailable" })
         .catch(() => ({ status: "unavailable" })), 60, itemTTL);
+  }
+
+  function readDailySales(item) {
+    const key = keyOf(item);
+    const url = RolimonsItemDetails.profile_url(item.id, null, { isBundle: item.kind === "bundle" });
+    return cached(dailySalesCache, key) || remember(dailySalesCache, key,
+      request(url, {}, "text").then(({ data, status }) => ({
+        average: data ? RoxolRolimons.readDailySales(data) : null,
+        ...(status === 200 || status === 404 ? {} : { status: "unavailable" }),
+      })).catch(() => ({ status: "unavailable" })), 600, itemTTL);
   }
 
   function readBestListing(item) {
@@ -566,6 +577,12 @@
     "roxol:market-sales"(message) {
       const item = targetOf(message.item?.kind, message.item?.id);
       return item ? readTrackedSales(item) : { status: "unavailable" };
+    },
+    async "roxol:market-daily-sales"(message) {
+      const item = targetOf(message.item?.kind, message.item?.id);
+      if (!item) return { status: "unavailable" };
+      const feed = await readItemFeed();
+      return feed && !feed.get(keyOf(item))?.demand ? readDailySales(item) : { status: "unavailable" };
     },
     "roxol:market-trade-history"(message, route) {
       if (route.page !== "detail" || route.kind !== "asset" || message.assetId !== route.id ||

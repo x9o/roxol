@@ -4,10 +4,10 @@ Roxol is a Chrome and Edge extension for Roblox limited items and trading. It us
 
 ## Current features
 
-- **Item insights** on supported Marketplace cards, item and bundle detail pages, and inventory cards. See Recent Average Price (RAP), Rolimon's assigned value or a labeled fallback, demand, published trend, and rare or projected flags where available. **Might raise** and **Might drop** compare the current RAP snapshot with value-tier thresholds. Detail pages compare Roblox's Best Price with RAP and assigned value.
+- **Item insights** on supported Marketplace cards, item and bundle detail pages, and inventory cards. See Recent Average Price (RAP), Rolimon's assigned value or a labeled fallback, demand or average daily sales, published trend, and rare or projected flags where available. **Might raise** and **Might drop** compare the current RAP snapshot with value-tier thresholds. Detail pages compare Roblox's Best Price with RAP and assigned value.
 - **Sales history** with an interactive preview and a full viewer. See tracked sale dates, estimated prices, RAP before and after each sale, how often sales exceeded pre-sale RAP, and how the median prices for the last 10 and 30 tracked sales compare with assigned value and Best Price. The full viewer also includes Roblox's daily resale prices and volume where available.
 - **Profiles and inventories** with RAP and value totals for loaded copies, a paginated breakdown, serial numbers where available, and RoliBadges. Eligible profiles can show a **Trade Items** shortcut in narrow layouts.
-- **Trade comparisons** on selected trades and send and counter forms. Each offer shows its Rolimon's total below the native total, which is labeled `(RAP)`. The Rolimon's total uses the same item fallbacks and Robux amounts as the value comparison. Limited-item cards show Roblox RAP, Rolimon's value or a labeled RAP fallback, and demand, state, and sales history where available. Centered badges between the offers show signed RAP and value changes, with Robux and Rolimon's icons and green and red indicators for gains and losses.
+- **Trade comparisons** on selected trades and send and counter forms. Each offer shows its Rolimon's total below the native total, which is labeled `(RAP)`. The Rolimon's total uses the same item fallbacks and Robux amounts as the value comparison. Limited-item cards show Roblox RAP, Rolimon's value or a labeled RAP fallback, demand or average daily sales, state, and sales history where available. Centered badges between the offers show signed RAP and value changes, with Robux and Rolimon's icons and green and red indicators for gains and losses.
 - **Overpay** on limited Marketplace asset pages. Compare raw trade statistics and filtered market-rate estimates for one-for-one and one-for-many RoUtility exchanges, with pricing coverage, confidence, and a downloadable sample audit.
 - **Item trade history** from RoUtility. Select **View trades** on a Roblox Marketplace asset page to compare item baskets, reported totals, and overpay side by side. Expand a record for its observation details, RAP, and Value. A local report resolves historical Rolimon's valuations and gives per-item swap, upgrade, and downgrade overpay statistics for exported trades.
 - **Reference links** to Rolimon's item, bundle, sales, and player pages.
@@ -34,6 +34,12 @@ Enable Developer mode at `chrome://extensions` or `edge://extensions`, then sele
 The limited-card **Copy ID** control is disabled while its implementation is kept for future work.
 
 Roxol reuses item and resale helpers from Nevos. [Nevos source license](extension/vendor/nevos/LICENSE)
+
+## Resale activity badges
+
+When Rolimon's has no assigned demand rating, Roxol uses the **Avg Daily Sales** figure from its public item or bundle page. Hover over or focus the badge for an explanation of the resale activity metric. The extension's background worker shares lookups across tabs, caches page results for five minutes, and caches transient failures for 20 seconds. A published zero displays as `0.00 sales/day`. If the figure is unavailable, the badge is hidden.
+
+To verify the fallback, open Epic Egg (`4773569689`) in Marketplace and compare its badge with Rolimon's published figure. Check the same badge on an inventory or trade card that contains an unrated limited item. A rated item should still show its demand indicator. [Epic Egg on Rolimon’s](https://www.rolimons.com/item/4773569689)
 
 ## Item overpay
 

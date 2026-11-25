@@ -1,6 +1,8 @@
 const RoxolMarketUI = (() => {
   const { keyOf, robloxItemUrl, rolimonsSalesUrl } = RoxolTargets;
   const numberFormat = new Intl.NumberFormat();
+  const dailySalesFormat = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const dailySalesTooltip = "Resale activity · Average daily resales tracked by Rolimon’s.";
   const percentFormat = new Intl.NumberFormat(undefined, { style: "percent" });
   const dealFormat = new Intl.NumberFormat(undefined, { style: "percent", signDisplay: "exceptZero", maximumFractionDigits: 1 });
   const dateFormat = new Intl.DateTimeFormat(undefined, {
@@ -261,10 +263,9 @@ const RoxolMarketUI = (() => {
     return ["", "At RAP"];
   }
 
-  function itemBadges(meta) {
+  function itemBadges(meta, dailySales, { activityOnly = false } = {}) {
     const badges = element("ul", "roxol-badges");
-    if (!meta) return badges;
-    const add = (text, title, { direction = "", iconName } = {}) => {
+    const add = (text, title, { direction = "", iconName, focusable = false } = {}) => {
       const badge = element("li", "roxol-badge", text);
       if (iconName) {
         badge.classList.add("roxol-icon-badge");
@@ -272,7 +273,7 @@ const RoxolMarketUI = (() => {
       }
       badge.dataset.direction = direction;
       badge.setAttribute("aria-label", `${text}. ${title}`);
-      if (direction) {
+      if (direction || focusable) {
         badge.dataset.tooltip = title;
         badge.tabIndex = 0;
       } else {
@@ -280,9 +281,13 @@ const RoxolMarketUI = (() => {
       }
       badges.append(badge);
     };
-    if (meta.rare) add("Rare", "Rare by Rolimon’s");
-    if (meta.projected) add("Projected", "Projected by Rolimon’s");
-    if (meta.demand) add(`${meta.demand} demand`, "Demand · Rolimon’s", { iconName: "demand" });
+    if (!activityOnly && meta?.rare) add("Rare", "Rare by Rolimon’s");
+    if (!activityOnly && meta?.projected) add("Projected", "Projected by Rolimon’s");
+    if (meta?.demand) add(`${meta.demand} demand`, "Demand · Rolimon’s", { iconName: "demand" });
+    else dailySales?.then((label) => {
+      if (label) add(label, dailySalesTooltip, { iconName: "activity", focusable: true });
+    });
+    if (activityOnly || !meta) return badges;
     if (meta.trend) add(`Trend · ${meta.trend}`, "Published trend · Rolimon’s", { iconName: `trend-${meta.trend.toLowerCase()}` });
     if (meta.signal) {
       const { direction, target, threshold } = meta.signal;
@@ -692,6 +697,21 @@ const RoxolMarketUI = (() => {
     panel.setAttribute("aria-label", "Roxol item information");
     const rap = metric("RAP", "robux", item.rap);
     const meta = item.rolimons;
+    const target = { kind: item.kind, id: item.id };
+    const dailySales = meta?.demand ? null : request("daily-sales", { item: target }).then(({ average } = {}) =>
+      Number.isFinite(average) && average >= 0 ? `${dailySalesFormat.format(average)} sales/day` : null);
+    if (cardOverlay) {
+      if (meta?.demand) {
+        const badge = cardBadge(`Demand: ${meta.demand}`, "demand", "demand");
+        badge.dataset.demand = meta.demand.toLowerCase();
+        cardOverlay.prepend(badge);
+      } else {
+        dailySales.then((label) => {
+          if (!label || !cardOverlay.isConnected) return;
+          cardOverlay.prepend(cardBadge(`${label} · ${dailySalesTooltip}`, "activity", "daily-sales", label));
+        });
+      }
+    }
     const value = metric("Value", "rolimons", meta?.value);
     rap.row.title = "Recent Average Price";
     value.row.title = "Assigned value · Rolimon’s";
@@ -724,6 +744,7 @@ const RoxolMarketUI = (() => {
       if (nativeLabel) metrics.append(metric(nativeLabel, "robux", item.rap).row);
       metrics.append(value.row);
       panel.append(metrics);
+      if (!cardOverlay) panel.append(itemBadges(meta, dailySales, { activityOnly: true }));
       (cardOverlay || panel).append(actions);
     } else {
       const label = element("div", "font-header-1 text-subheader text-label row-label", "Value");
@@ -731,7 +752,7 @@ const RoxolMarketUI = (() => {
       const amount = element("div", "roxol-native-value", value.figure.textContent);
       amount.title = value.row.title;
       amount.prepend(icon("rolimons"));
-      content.append(amount, itemBadges(meta), actions);
+      content.append(amount, itemBadges(meta, dailySales), actions);
       panel.append(label, content);
     }
 
@@ -747,7 +768,7 @@ const RoxolMarketUI = (() => {
     const footer = element("div", "roxol-actions roxol-preview-footer");
     footer.append(more, card ? provider : rolimonsSalesLink(item));
     preview.append(element("h3", "", "Recent sales"), previewMetrics);
-    if (card) preview.append(itemBadges(meta));
+    if (card) preview.append(itemBadges(meta, dailySales));
     preview.append(previewBody, footer);
     (cardOverlay || panel).append(preview);
     if (card) {
@@ -755,8 +776,6 @@ const RoxolMarketUI = (() => {
         if (event.target.closest("button, a")) event.stopPropagation();
       });
     }
-    const target = { kind: item.kind, id: item.id };
-
     let resale;
     function getResale() {
       resale ??= request("resale", { item: target }).then((result) => {
@@ -837,10 +856,7 @@ const RoxolMarketUI = (() => {
     const nativePrice = price && (priceIsRap ? /^\s*\d+(?:[,.'’\s]\d{3})*\s*$/.test(priceText)
       : /\d|^\s*free\s*$/i.test(priceText));
     const overlay = element("div", "roxol-market roxol-card-overlay");
-    const demand = item.rolimons?.demand || "Unknown";
-    const demandBadge = cardBadge(`Demand: ${demand}`, "demand", "demand");
-    demandBadge.dataset.demand = demand.toLowerCase();
-    overlay.append(demandBadge, cardState(item.rolimons));
+    overlay.append(cardState(item.rolimons));
     if (showCardCopyId && item.copyId) {
       const label = item.serial ? `#${item.serial}` : /^\d+$/.test(item.copyId) ? `ID ${item.copyId}` : "Copy ID";
       overlay.append(cardBadge(`${item.serial ? `Serial #${item.serial}\n` : ""}Copy ID: ${item.copyId}`, null, "copy", label));

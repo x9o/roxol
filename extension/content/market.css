@@ -187,12 +187,22 @@
 }
 .roxol-card-overlay .roxol-history-trigger { font-size: 0; gap: 0; }
 .roxol-card-overlay .roxol-card-control { position: absolute; }
-.roxol-market.roxol-card-overlay .roxol-card-demand {
+.roxol-market.roxol-card-overlay :is(.roxol-card-demand, .roxol-card-daily-sales) {
   top: 3px;
   left: 3px;
   background: var(--roxol-selected);
   color: var(--roxol-ink);
   border-color: transparent;
+}
+.roxol-card-overlay .roxol-button.roxol-card-daily-sales {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  max-width: calc(100% - 59px);
+  padding-inline: 4px;
+  font-size: .6875rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
 }
 .roxol-card-overlay .roxol-card-state { top: 3px; right: 29px; }
 .roxol-card-overlay .roxol-button.roxol-card-copy {
@@ -302,6 +312,9 @@
 .roxol-market-symbol:not(.roxol-history-icon) { background: currentColor; }
 .roxol-demand-icon {
   clip-path: polygon(50% 0, 64% 24%, 65% 44%, 78% 33%, 88% 56%, 90% 77%, 80% 93%, 67% 100%, 57% 100%, 66% 82%, 49% 62%, 38% 80%, 43% 100%, 28% 96%, 14% 84%, 11% 66%, 24% 43%, 33% 56%, 43% 36%);
+}
+.roxol-activity-icon {
+  clip-path: polygon(0 46%, 23% 46%, 39% 13%, 58% 68%, 71% 46%, 100% 46%, 100% 60%, 78% 60%, 55% 96%, 37% 49%, 31% 60%, 0 60%);
 }
 .roxol-trend-stable-icon { clip-path: inset(42% 0); }
 .roxol-trend-raising-icon, .roxol-trend-lowering-icon {
