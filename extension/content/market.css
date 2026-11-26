@@ -207,15 +207,17 @@
   top: 3px;
   left: 3px;
 }
-.roxol-market.roxol-card-overlay .roxol-card-demand {
-  background: var(--roxol-selected);
-  color: var(--roxol-ink);
+.roxol-market.roxol-card-overlay .roxol-button.roxol-card-demand {
+  background: var(--roxol-demand-background, var(--roxol-selected));
+  color: var(--roxol-demand-color, var(--roxol-ink));
   border-color: transparent;
+  font-weight: 700;
+  line-height: 13px;
 }
-.roxol-card-overlay .roxol-card-demand[data-demand="amazing"] { background: #ffe082; color: #533708; }
-.roxol-card-overlay .roxol-card-demand[data-demand="high"] { background: #e9d5ff; color: #5e2389; }
-.roxol-card-overlay .roxol-card-demand[data-demand="normal"] { background: #c2efd1; color: #185239; }
-.roxol-card-overlay .roxol-card-demand:is([data-demand="low"], [data-demand="terrible"]) { background: #ffd5d1; color: #851d22; }
+.roxol-card-overlay .roxol-card-demand[data-demand="amazing"] { --roxol-demand-background: #ffe082; --roxol-demand-color: #533708; }
+.roxol-card-overlay .roxol-card-demand[data-demand="high"] { --roxol-demand-background: #e9d5ff; --roxol-demand-color: #5e2389; }
+.roxol-card-overlay .roxol-card-demand[data-demand="normal"] { --roxol-demand-background: #c2efd1; --roxol-demand-color: #185239; }
+.roxol-card-overlay .roxol-card-demand:is([data-demand="low"], [data-demand="terrible"]) { --roxol-demand-background: #ffd5d1; --roxol-demand-color: #851d22; }
 .roxol-card-overlay .roxol-button.roxol-card-daily-sales {
   display: block;
   max-width: calc(100% - 59px);
@@ -377,8 +379,9 @@
   background-repeat: no-repeat;
 }
 .roxol-market-symbol:not(.roxol-history-icon) { background: currentColor; }
-.roxol-demand-icon {
-  clip-path: polygon(50% 0, 64% 24%, 65% 44%, 78% 33%, 88% 56%, 90% 77%, 80% 93%, 67% 100%, 57% 100%, 66% 82%, 49% 62%, 38% 80%, 43% 100%, 28% 96%, 14% 84%, 11% 66%, 24% 43%, 33% 56%, 43% 36%);
+.roxol-demand-rating {
+  width: 14px;
+  text-align: center;
 }
 .roxol-trend-stable-icon { clip-path: inset(42% 0); }
 .roxol-trend-raising-icon, .roxol-trend-lowering-icon {

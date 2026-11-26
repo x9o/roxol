@@ -266,14 +266,13 @@ const RoxolMarketUI = (() => {
 
   function itemBadges(meta, dailySales, { activityOnly = false, indicators = true, projected = true } = {}) {
     const badges = element("ul", "roxol-badges");
-    const add = (text, title, { direction = "", iconName, focusable = false } = {}) => {
+    const add = (text, title, { direction = "", iconName, rating, focusable = false } = {}) => {
       const badge = element("li", "roxol-badge", text);
-      if (iconName) {
-        badge.classList.add("roxol-icon-badge");
-        badge.prepend(symbol(iconName));
-      }
+      if (iconName || rating !== undefined) badge.classList.add("roxol-icon-badge");
+      if (iconName) badge.prepend(symbol(iconName));
+      if (rating !== undefined) badge.prepend(element("strong", "roxol-demand-rating", rating));
       badge.dataset.direction = direction;
-      badge.setAttribute("aria-label", `${text}. ${title}`);
+      badge.setAttribute("aria-label", `${rating === undefined ? "" : `${rating} of 5. `}${text}. ${title}`);
       if (direction || focusable) {
         badge.dataset.tooltip = title;
         badge.tabIndex = 0;
@@ -285,7 +284,7 @@ const RoxolMarketUI = (() => {
     if (!activityOnly && indicators && meta?.rare) add("Rare", "Rare by Rolimon’s");
     if (!activityOnly && projected && meta?.projected) add("Projected", "Projected by Rolimon’s");
     if (!indicators) return badges;
-    if (meta?.demand) add(`${meta.demand} demand`, "Demand · Rolimon’s", { iconName: "demand" });
+    if (meta?.demand) add(`${meta.demand} demand`, "Demand · Rolimon’s", { rating: meta.demandRating });
     else dailySales?.then((figure) => {
       if (figure) add(`${figure} sales/day`, dailySalesTooltip, { focusable: true });
     });
@@ -710,13 +709,17 @@ const RoxolMarketUI = (() => {
       Number.isFinite(average) && average >= 0 ? dailySalesFormat.format(average) : null);
     if (cardOverlay && indicators) {
       if (meta?.demand) {
-        const badge = cardBadge(`Demand: ${meta.demand}`, "demand", "demand");
+        const badge = cardBadge(`Demand: ${meta.demand} (${meta.demandRating}/5)`, null, "demand", meta.demandRating);
         badge.dataset.demand = meta.demand.toLowerCase();
         cardOverlay.prepend(badge);
       } else {
         dailySales.then((figure) => {
-          if (!figure || !cardOverlay.isConnected) return;
-          cardOverlay.prepend(cardBadge(`${figure} sales/day · ${dailySalesTooltip}`, null, "daily-sales", `${figure} S/D`));
+          if (!cardOverlay.isConnected) return;
+          if (figure) {
+            cardOverlay.prepend(cardBadge(`${figure} sales/day · ${dailySalesTooltip}`, null, "daily-sales", `${figure} S/D`));
+          } else if (meta?.demandRating === 0) {
+            cardOverlay.prepend(cardBadge("Demand: Unrated by Rolimon’s", null, "demand", 0));
+          }
         });
       }
     }

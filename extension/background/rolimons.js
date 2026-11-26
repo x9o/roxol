@@ -34,11 +34,13 @@ const RoxolRolimons = (() => {
         const kind = !splitFeed && payload.bundleIds?.[id] ? "bundle" : type;
         const rap = amount(row[ROW_RAP]);
         const value = amount(row[ROW_VALUE]);
-        const demand = row[5] == null ? null : demandLabels[get_item_demand(row)] ?? null;
+        const demandTier = row[5] == null ? -1 : get_item_demand(row);
+        const demand = demandLabels[demandTier] ?? null;
         const projected = [0, 1, -1].includes(row[7]) ? row[7] === 1 : null;
         index.set(keyOf({ kind, id }), {
           name: row[0], acronym: row[1] || null, rap, value, fallbackValue: amount(row[4]),
-          demand, trend: trendLabels[row[6]] ?? null, projected, rare: is_item_rare(row),
+          demand, demandRating: demand ? demandTier + 1 : 0,
+          trend: trendLabels[row[6]] ?? null, projected, rare: is_item_rare(row),
           signal: rapSignal(rap, value, demand, projected), checkedAt,
         });
       }

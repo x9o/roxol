@@ -55,9 +55,9 @@ Open Roblox **Trades** while signed in and switch among Inbound, Outbound, Compl
 
 ## Resale activity badges
 
-Rated item cards show a demand icon colored by Rolimon's tier. When Rolimon's has no assigned demand rating, Roxol uses the **Avg Daily Sales** figure from its public item or bundle page. Thumbnail badges abbreviate sales per day as `S/D`. Hover over or focus the badge to see the full figure and an explanation of the resale activity metric. The extension's background worker shares lookups across tabs, caches page results for five minutes, and caches transient failures for 20 seconds. A published zero displays as `0.00 S/D` on thumbnails. If the figure is unavailable, the badge is hidden.
+Rated items show Rolimon's demand as `1` Terrible, `2` Low, `3` Normal, `4` High, or `5` Amazing. Card badges retain their tier colors. Hover over or focus a card badge to read the tier name. For unrated items, Roxol uses the **Avg Daily Sales** figure from the public Rolimon's item or bundle page when available. Thumbnail badges abbreviate sales per day as `S/D`. Hover over or focus the badge to see the full figure and an explanation of the resale activity metric. A published zero displays as `0.00 S/D`. An unrated item with a Rolimon's entry and no available sales figure shows a neutral `0` on its card. The extension's background worker shares lookups across tabs, caches page results for five minutes, and caches transient failures for 20 seconds.
 
-To verify the fallback, open Epic Egg (`4773569689`) in Marketplace and compare its badge with Rolimon's published figure. Check the same badge on an inventory or trade card that contains an unrated limited item. A rated item should still show its demand indicator. [Epic Egg on Rolimon’s](https://www.rolimons.com/item/4773569689)
+To verify the demand badge, hover over a rated limited item's Marketplace card and compare the displayed number and tooltip with its Rolimon's tier. To verify the sales fallback, open Epic Egg (`4773569689`) in Marketplace and compare its badge with Rolimon's published figure. Check the same badge on an inventory or trade card that contains an unrated limited item. [Epic Egg on Rolimon’s](https://www.rolimons.com/item/4773569689)
 
 ## Item overpay
 
