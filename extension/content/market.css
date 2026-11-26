@@ -786,19 +786,6 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
   .roxol-loading-status:is([aria-busy="true"], [data-loading])::before { animation: roxol-spin .8s linear infinite; }
 }
 @keyframes roxol-spin { to { rotate: 1turn; } }
-.roxol-progress-bar {
-  display: block;
-  inline-size: 100%;
-  block-size: 5px;
-  border: 0;
-  border-radius: 3px;
-  overflow: hidden;
-  background: var(--roxol-selected);
-  appearance: none;
-}
-.roxol-progress-bar::-webkit-progress-bar { background: var(--roxol-selected); }
-.roxol-progress-bar::-webkit-progress-value { background: var(--roxol-muted); border-radius: 3px; }
-
 .roxol-basket-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .roxol-trade-basket { min-inline-size: 0; padding-inline: 10px; }
 .roxol-trade-basket:first-child { padding-inline-start: 0; }
@@ -901,17 +888,35 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
   margin-bottom: 5px;
 }
 .roxol-overpay-header .roxol-link { font-size: var(--roxol-text-small); }
-.roxol-overpay-rate { margin-block: 7px; }
-.roxol-stat-grid-primary { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 3px; }
-.roxol-stat-grid-primary dd { font-size: .875rem; }
-.roxol-stat-grid-primary dd .roxol-number { font-size: 1rem; }
-.roxol-overpay-caption, .roxol-overpay-note, .roxol-overpay-progress {
+.roxol-overpay-rate { margin-block: 10px; }
+.roxol-overpay-directions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+.roxol-overpay-directions > div { min-inline-size: 0; padding: 2px 8px 2px 0; }
+.roxol-overpay-directions > div + div {
+  border-inline-start: 1px solid var(--roxol-line);
+  padding-inline: 10px 0;
+}
+.roxol-overpay-directions dt { font-size: .875rem; font-weight: 650; }
+.roxol-overpay-directions dd {
+  margin: 2px 0 0;
+  color: var(--roxol-muted);
+  font-size: var(--roxol-text-small);
+  overflow-wrap: break-word;
+}
+.roxol-overpay-amount {
+  color: var(--roxol-ink);
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.roxol-overpay-caption, .roxol-overpay-note {
   color: var(--roxol-muted);
   font-size: var(--roxol-text-small);
 }
 .roxol-overpay-note { margin: 4px 0; }
-.roxol-overpay-progress { margin: 6px 0 8px; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
-.roxol-overpay-progress .roxol-progress-bar { margin-top: 3px; }
 .roxol-overpay-details { border-top: 1px solid var(--roxol-line); }
 .roxol-overpay-details .roxol-stat-grid { margin-block: 3px 8px; }
 .roxol-overpay-details .roxol-button { margin-block: 3px 6px; }
@@ -930,8 +935,16 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
 .roxol-overpay-trade-values { display: grid; align-content: center; text-align: end; font-weight: 600; }
 .roxol-overpay-trade-values > :last-child { font-size: var(--roxol-text-small); }
 
+@container (max-width: 235px) {
+  .roxol-overpay-directions { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+  .roxol-overpay-directions > div + div {
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--roxol-line);
+    padding-inline: 0;
+    padding-block-start: 5px;
+  }
+}
 @container (max-width: 390px) {
-  .roxol-stat-grid-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .roxol-trade-basket { padding-inline: 5px; }
   .roxol-basket-item { gap: 4px; }
   .roxol-basket-thumbnail { inline-size: 22px; }

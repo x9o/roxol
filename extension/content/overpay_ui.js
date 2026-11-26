@@ -74,22 +74,30 @@ const RoxolOverpay = (() => {
     return stats;
   }
 
+  function tradeDirection(label, action, median) {
+    if (median == null) return stat(label, "—");
+    if (median === 0) return stat(label, "Even trade");
+    const amount = element("strong", "roxol-overpay-amount",
+      `${spread.format(Math.abs(median))} ${median > 0 ? "more" : "less"}`);
+    const row = stat(label, amount);
+    row.lastElementChild.prepend(`You ${action} `);
+    return row;
+  }
+
   function renderGroup(rate, details, trades, { summary, history }, preliminary, preserveOpen) {
     const { sampleSize, recency, valuationCoverage, marketRate, severeImbalances } = summary;
     const insufficient = marketRate.confidence === "insufficient";
-    const headline = preliminary ? "Preliminary estimate" : insufficient ? "Insufficient data" : "Market-rate estimate";
-    const stats = element("dl", "roxol-stat-grid roxol-stat-grid-primary");
-    stats.append(
-      stat("Median OP", figure(preliminary || insufficient ? null : marketRate.overpay.median)),
-      stat("Median OP %", percentage(preliminary || insufficient ? null : marketRate.overpayPercent.median)),
-      stat("Retained trades", ui.format(marketRate.sampleSize)),
-      stat("Confidence", preliminary ? "Pending" : confidenceLabels[marketRate.confidence]),
+    const median = preliminary || insufficient ? null : marketRate.overpay.median;
+    const directions = element("dl", "roxol-overpay-directions");
+    directions.append(
+      tradeDirection("Get this item", "give", median),
+      tradeDirection("Give this item", "get", median),
     );
-    rate.replaceChildren(element("h3", "roxol-trading-subheading", headline), stats);
+    rate.replaceChildren(directions);
     if (preliminary || insufficient) {
       rate.append(element("p", "roxol-overpay-note", preliminary
         ? "Sample medians are in Estimate details while trade history is incomplete."
-        : "A market rate requires at least 10 retained trades."));
+        : `An estimate needs 10 trades. ${ui.format(marketRate.sampleSize)} passed the filter.`));
     }
     const { firstPricedObservationAt, lastPricedObservationAt } = recency;
     const dates = sampleSize
@@ -98,7 +106,8 @@ const RoxolOverpay = (() => {
     raw.append(stat("Priced trades", `${ui.format(sampleSize)} of ${ui.format(valuationCoverage.eligibleTrades)}`),
       stat("Priced dates (UTC)", dates));
     const market = statistics(marketRate);
-    market.append(stat("Severe imbalances excluded", ui.format(severeImbalances)));
+    market.append(stat("Retained trades", ui.format(marketRate.sampleSize)),
+      stat("Severe imbalances excluded", ui.format(severeImbalances)));
     const explanation = marketRate.confidenceReasons.map((reason) => confidenceReasons[reason]).join(", ");
     details.replaceChildren(
       element("h3", "roxol-trading-subheading", "Raw trade statistics"), raw,
@@ -138,17 +147,6 @@ const RoxolOverpay = (() => {
       ui.link("RoUtility", `https://routility.io/catalog/${assetId}/trades`, true));
     const status = element("p", "roxol-overpay-note", "Loading overpay…");
     status.setAttribute("role", "status");
-    const progress = element("ul", "roxol-overpay-progress");
-    const progressRows = {};
-    for (const [group, label] of [["swap", "One-for-one"], ["downgrade", "One-for-many"]]) {
-      const row = element("li");
-      const count = element("span");
-      const bar = element("progress", "roxol-progress-bar");
-      bar.setAttribute("aria-label", label + " trade pricing coverage");
-      row.append(count, bar);
-      progress.append(row);
-      progressRows[group] = { row, count, bar };
-    }
     status.classList.add("roxol-loading-status");
     status.setAttribute("aria-busy", "true");
     panel.append(header, status);
@@ -157,6 +155,7 @@ const RoxolOverpay = (() => {
     filter.setAttribute("role", "group");
     filter.setAttribute("aria-label", "Trade type");
     const rate = element("div", "roxol-overpay-rate");
+    rate.setAttribute("aria-live", "polite");
     const details = element("details", "roxol-disclosure roxol-overpay-details");
     const statisticsBody = element("div");
     const history = element("details", "roxol-disclosure roxol-overpay-details");
@@ -166,7 +165,7 @@ const RoxolOverpay = (() => {
     const exclusions = element("dl", "roxol-stat-grid");
     const download = ui.button("Download sample audit");
     const note = element("p", "roxol-overpay-note",
-      "Up to 500 records first observed in the past 7 days. Roxol uses RoUtility’s reported trade-time Value or RAP. OP is the other basket’s total minus the isolated item’s price. OP percentage uses the isolated item as the baseline. The filter excludes trades where one basket was worth more than twice the other. OP covers items only.");
+      "Get and Give use the same trades. Each shows how the other basket compares with the page item’s value. Roxol samples up to 500 records first observed in the past 7 days and uses RoUtility’s reported trade-time Value or RAP. OP percentage uses the page item as the baseline. The filter excludes trades where one basket was worth more than twice the other. OP covers items only.");
     details.append(element("summary", "", "Estimate details"), statisticsBody, note, auditNote, exclusions, download);
     const options = { swap: ui.button("One-for-one"), downgrade: ui.button("One-for-many") };
     let selected;
@@ -179,7 +178,6 @@ const RoxolOverpay = (() => {
       const scroll = older?.querySelector("ul")?.scrollTop;
       const focused = preserveOpen ? [...trades.querySelectorAll("summary, a")].indexOf(document.activeElement) : -1;
       for (const [key, button] of Object.entries(options)) button.setAttribute("aria-pressed", String(group === key));
-      for (const [key, { row }] of Object.entries(progressRows)) row.hidden = key !== group;
       renderGroup(rate, statisticsBody, trades, sample.groups[group], sample.partial && !sample.cachedFallback, !!older);
       const restoredList = older && trades.querySelector(".roxol-overpay-history ul");
       if (scroll && restoredList) restoredList.scrollTop = scroll;
@@ -214,7 +212,7 @@ const RoxolOverpay = (() => {
       }
       const first = !sample;
       sample = data;
-      if (first) panel.append(filter, rate, progress, details, history);
+      if (first) panel.append(filter, rate, details, history);
       const notices = [];
       if (data.cachedFallback) notices.push("RoUtility could not refresh. Showing saved trades.");
       else if (data.partial) notices.push("RoUtility returned only part of the sample.");
@@ -223,15 +221,6 @@ const RoxolOverpay = (() => {
       status.hidden = !notices.length;
       status.removeAttribute("data-loading");
 
-      for (const [group, { count, bar }] of Object.entries(progressRows)) {
-        const { pricedTrades, eligibleTrades } = data.groups[group].summary.valuationCoverage;
-        const unavailableTrades = eligibleTrades - pricedTrades;
-        const coverage = eligibleTrades ? ` (${Math.floor(pricedTrades * 100 / eligibleTrades)}%)` : "";
-        const unavailable = unavailableTrades ? ` · ${ui.format(unavailableTrades)} unavailable` : "";
-        count.textContent = `${ui.format(pricedTrades)} of ${ui.format(eligibleTrades)} priced${coverage}${unavailable}`;
-        bar.max = eligibleTrades || 1;
-        bar.value = pricedTrades;
-      }
       const excluded = Object.values(data.exclusions).reduce((sum, count) => sum + count, 0);
       auditNote.textContent = `${ui.format(data.audit.length)} sampled records · ${ui.format(excluded)} excluded before trade statistics`;
       exclusions.replaceChildren(...Object.entries(data.exclusions)

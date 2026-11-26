@@ -49,7 +49,7 @@ node tools/overpay/overpay-sampling.test.mjs
 
 Open `itemOverpay.items[assetId]` in the valuation report. Each group's `recent` window covers the last 30 days and `allObserved` covers observations supplied in the input. Exported pages determine how much of each window is represented.
 
-The Marketplace widget and its sample audit cover the most recent seven days of first observations, up to 500 RoUtility records. The widget uses the price snapshots on those records and stores up to 12 complete samples locally for two-minute reuse across tabs and worker restarts. The audit’s `trades` array contains eligible records for the standalone historical resolver. The audit’s `groups` show the widget’s snapshot-based results. [Marketplace calculation and cache](../../README.md#item-overpay)
+The Marketplace widget and its sample audit cover the most recent seven days of first observations, up to 500 RoUtility records. **Get this item** and **Give this item** present the same filtered sample median from each side of the trade. The widget uses the price snapshots on those records and stores up to 12 complete samples locally for two-minute reuse across tabs and worker restarts. The audit’s `trades` array contains eligible records for the standalone historical resolver. The audit’s `groups` show the widget’s snapshot-based results. [Marketplace calculation and cache](../../README.md#item-overpay)
 
 The standalone valuation report works from the supplied export and uses the end of each observation interval for its recent window. Its `normalizationExclusions` and `excludedRecords` preserve duplicate and malformed inputs that could not be normalized into `trades`. The `profileFailures` map carries reason codes and observed HTTP statuses by asset ID. Individual resolved records include the severe-imbalance flag and historical valuation gaps by item row.
 
@@ -62,6 +62,8 @@ The standalone valuation report works from the supplied export and uses the end 
 ### Marketplace snapshot verification
 
 On November 26, 2026 a fresh headless Edge profile loaded the live Silver King of the Night Marketplace page and displayed the estimate in 8.2 seconds from navigation. RoUtility snapshots priced all 35 eligible trades in each group. The one-for-many group retained 26 trades after the imbalance filter and had a median OP of −5,250. The one-for-one group retained nine trades and displayed insufficient data. The live layout and trade-type switch were checked at 1,440 px and 375 px. Fixture tests check seven-day eligibility, Value and RAP fallback, quantities, missing prices, partial history, cache reuse after worker restart, and refresh after expiration.
+
+The Get and Give display was checked on the live Silver King of the Night listing for negative and insufficient results. A dark-theme fixture verified positive and even results, plus access to pricing coverage and trade counts in **Estimate details**. Both checks used 1,440 px and 375 px Edge viewports.
 
 ### Historical Marketplace cold-cache verification
 
