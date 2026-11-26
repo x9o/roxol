@@ -62,6 +62,7 @@
         "shared/market_targets.js",
         "shared/trades.js",
         "vendor/nevos/rolimons_item_details.js",
+        "shared/preferences.js",
         "content/market_ui.js",
         "content/trade_page.js"
       ],
@@ -82,6 +83,7 @@
       "js": [
         "shared/market_targets.js",
         "vendor/nevos/rolimons_item_details.js",
+        "shared/preferences.js",
         "content/market_ui.js",
         "content/overpay_ui.js",
         "content/trade_history.js",

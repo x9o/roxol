@@ -1,47 +1,49 @@
-const themePicker = document.querySelector("#theme");
+const form = document.querySelector("form");
+const controls = [...form.querySelectorAll("select, input")];
+const groups = form.querySelectorAll("[data-feature]");
 const settingsStatus = document.querySelector("#settings-status");
-const themeKey = "appearance";
-const themes = new Set(["system", "light", "dark"]);
-let savedTheme = "system";
-
-function renderTheme(value) {
-  savedTheme = themes.has(value) ? value : "system";
-  document.documentElement.dataset.theme = savedTheme;
-  themePicker.value = savedTheme;
-}
+const pageStatus = document.querySelector("#page-status");
+let preferences;
+let onTrades = false;
 
 function showSettingsError(message) {
   settingsStatus.hidden = !message;
   settingsStatus.textContent = message;
 }
 
-async function loadTheme() {
-  try {
-    const settings = await chrome.storage.local.get(themeKey);
-    renderTheme(settings[themeKey]);
-    themePicker.disabled = false;
-  } catch {
-    showSettingsError("Roxol couldn't load your preferences.");
-  }
+function renderControl(control) {
+  if (control.type === "checkbox") control.checked = preferences[control.name];
+  else control.value = preferences[control.name];
 }
 
-themePicker.addEventListener("change", async () => {
-  const nextTheme = themePicker.value;
-  themePicker.disabled = true;
-  try {
-    await chrome.storage.local.set({ [themeKey]: nextTheme });
-    renderTheme(nextTheme);
-    showSettingsError("");
-  } catch {
-    renderTheme(savedTheme);
-    showSettingsError("Roxol couldn't save your appearance preference.");
-  } finally {
-    themePicker.disabled = false;
+function renderPageStatus() {
+  pageStatus.hidden = !onTrades || preferences?.enabled !== true;
+}
+
+let loaded = true;
+RoxolPreferences.watch((next) => {
+  preferences = next;
+  for (const control of controls) {
+    renderControl(control);
+    control.disabled = !loaded;
   }
+  for (const group of groups) group.disabled = !next.enabled;
+  renderPageStatus();
+}, () => {
+  loaded = false;
+  showSettingsError("Roxol couldn't load your preferences.");
 });
 
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes[themeKey]) renderTheme(changes[themeKey].newValue);
+form.addEventListener("change", async ({ target: control }) => {
+  if (!controls.includes(control)) return;
+  const value = control.type === "checkbox" ? control.checked : control.value;
+  try {
+    await chrome.storage.local.set({ [control.name]: value });
+    showSettingsError("");
+  } catch {
+    renderControl(control);
+    showSettingsError("Roxol couldn't save this preference.");
+  }
 });
 
 async function showAccount() {
@@ -67,14 +69,11 @@ async function showTradeTabStatus() {
   if (tab?.id === undefined) return;
 
   const reply = await chrome.tabs.sendMessage(tab.id, { type: "roxol:trade-page-status" });
-  if (reply?.ready) {
-    document.querySelector("#page-status").hidden = false;
-    document.querySelector("#open-trades").hidden = true;
-  }
+  onTrades = reply?.ready === true;
+  renderPageStatus();
 }
 
 document.querySelector("#open-trades").href = ROBLOX_TRADES_URL;
-void loadTheme();
 void showAccount();
 // Most tabs do not have a Roxol content script.
 void showTradeTabStatus().catch(() => {});

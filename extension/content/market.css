@@ -19,9 +19,11 @@
 
 .light-theme .roxol-market { color-scheme: light; }
 .dark-theme .roxol-market { color-scheme: dark; }
+:root[data-roxol-appearance="light"] .roxol-market { color-scheme: light; }
+:root[data-roxol-appearance="dark"] .roxol-market { color-scheme: dark; }
 
 .roxol-market *, .roxol-market *::before, .roxol-market *::after { box-sizing: border-box; }
-.roxol-market [hidden] { display: none !important; }
+.roxol-market[hidden], .roxol-market [hidden] { display: none !important; }
 .roxol-market :focus-visible { outline: 2px solid var(--roxol-ink); outline-offset: 2px; }
 
 .roxol-item {
@@ -226,6 +228,7 @@
   line-height: 1.15;
 }
 .roxol-card-overlay .roxol-card-state { top: 3px; right: 29px; }
+.roxol-card-without-sales .roxol-card-state { right: 3px; }
 .roxol-card-overlay .roxol-button.roxol-card-copy {
   bottom: 3px;
   left: 3px;
@@ -289,12 +292,9 @@
   inline-size: 100%;
   margin: 0;
   padding-block: 12px;
-  color-scheme: light dark;
   color: inherit;
   font: inherit;
 }
-.light-theme .roxol-market.roxol-trade-comparison { color-scheme: light; }
-.dark-theme .roxol-market.roxol-trade-comparison { color-scheme: dark; }
 
 .roxol-trade-chip {
   display: inline-flex;
@@ -848,6 +848,14 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
 .roxol-history-status { flex: 1 1 140px; text-align: center; }
 .roxol-history-records { margin-top: 8px; }
 .roxol-history-record { border-top: 1px solid var(--roxol-line); padding-block: 6px; }
+.roxol-history-actions ~ .roxol-history-nav { margin-top: 6px; }
+.roxol-history-without-stats .roxol-basket-item { grid-template-columns: auto minmax(0, 1fr); }
+.roxol-history-compact .roxol-basket-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-block-size: 0;
+  padding-block: 2px;
+}
+.roxol-history-compact.roxol-history-without-stats .roxol-basket-item { grid-template-columns: minmax(0, 1fr); }
 .roxol-history-caption {
   display: flex;
   align-items: baseline;

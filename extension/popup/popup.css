@@ -1,107 +1,120 @@
-:root {
-  color-scheme: light;
-  --paper: #f8f5ed;
-  --ink: #212a25;
-  --muted: #4d5c52;
-  --accent: #17604c;
-  --panel: #edf0e3;
-  --line: #c8cfc2;
-  --control-line: #7d8c80;
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --paper: #171d19;
-  --ink: #edf2e9;
-  --muted: #bdc9bd;
-  --accent: #a4e0c7;
-  --panel: #202c25;
-  --line: #3e5144;
-  --control-line: #7b9483;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="system"] {
-    color-scheme: dark;
-    --paper: #171d19;
-    --ink: #edf2e9;
-    --muted: #bdc9bd;
-    --accent: #a4e0c7;
-    --panel: #202c25;
-    --line: #3e5144;
-    --control-line: #7b9483;
-  }
-}
-
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-
-body {
+body.roxol-market {
   margin: 0;
-  background: var(--paper);
-  color: var(--ink);
-  font: 14px/1.5 "Trebuchet MS", sans-serif;
+  background: var(--roxol-paper);
+  font-family: "Builder Sans", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
 }
 
 main {
   width: 352px;
   max-width: 100%;
   margin-inline: auto;
-  padding: 18px 22px 22px;
+  padding: 10px 12px;
 }
 
-.masthead { border-top: 3px solid var(--accent); }
+.account {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 10px;
+  border: 1px solid var(--roxol-line);
+  border-radius: var(--roxol-radius);
+  background: var(--roxol-selected);
+}
 
 h1 {
-  margin: 10px 0 14px;
-  font: 400 46px/1.1 Georgia, serif;
-  letter-spacing: -.05em;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.25;
 }
 
-h2 { margin: 0; font-size: 15px; }
-p { margin: 4px 0 0; }
-
-.trade-panel {
-  padding: 13px 15px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-}
-
-.trade-panel p { color: var(--muted); overflow-wrap: anywhere; }
-
-#open-trades {
+.trades-link {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  min-height: 30px;
-  margin-top: 7px;
-  color: var(--accent);
-  font-weight: bold;
-  text-underline-offset: .2em;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
-#page-status { margin-top: 8px; color: var(--accent); }
-.preferences { margin-top: 17px; }
+p { margin: 0; color: var(--roxol-muted); }
+.account p { grid-column: 1 / -1; overflow-wrap: anywhere; font-size: .8125rem; }
+#page-status { font-size: .75rem; }
+
+form {
+  display: grid;
+  gap: 7px;
+  margin-top: 7px;
+}
+
+fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 1px 10px 3px;
+  border: 1px solid var(--roxol-line);
+  border-radius: var(--roxol-radius);
+}
+
+legend {
+  padding-inline: 4px;
+  font-weight: 700;
+}
+
+#history-source { font-size: .75rem; }
 
 .preference-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-top: 7px;
-  padding-top: 9px;
-  border-top: 1px solid var(--line);
+  gap: 8px;
+  min-height: 30px;
 }
 
-select {
-  min-height: 32px;
-  padding: 3px 7px;
-  border: 1px solid var(--control-line);
-  border-radius: 3px;
-  background: var(--paper);
-  color: var(--ink);
-  font: inherit;
+.preference-row + .preference-row { border-top: 1px solid var(--roxol-line); }
+.preference-row:has(input:enabled) { cursor: pointer; }
+fieldset:disabled .preference-row { color: var(--roxol-muted); }
+
+select { min-width: 76px; }
+
+input[role="switch"] {
+  appearance: none;
+  display: grid;
+  align-items: center;
+  flex: none;
+  width: 32px;
+  height: 18px;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--roxol-muted);
+  border-radius: 9px;
+  background: var(--roxol-paper);
+  color: var(--roxol-muted);
+  cursor: inherit;
 }
 
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-#settings-status { margin-top: 7px; color: var(--muted); }
+input[role="switch"]::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+input[role="switch"]:checked {
+  background: var(--roxol-ink);
+  border-color: var(--roxol-ink);
+  color: var(--roxol-paper);
+}
+
+input[role="switch"]:checked::before { justify-self: end; }
+input[role="switch"]:disabled { opacity: .55; }
+
+@media (forced-colors: active) {
+  input[role="switch"] { appearance: auto; width: auto; height: auto; }
+  input[role="switch"]::before { content: none; }
+}
+
+#settings-status { font-size: .8125rem; }

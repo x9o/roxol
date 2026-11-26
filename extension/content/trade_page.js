@@ -27,6 +27,7 @@
   let priorDetail;
   let comparison;
   let view;
+  let preferences;
 
   function nativeData(node) {
     let data;
@@ -390,6 +391,7 @@
     for (const { card, target, rap, instanceId, userAssetId, serial } of items) {
       const meta = metadata(target)?.data;
       if (!target) continue;
+      if (!preferences.tradeItems && !(preferences.tradeProjected && meta?.rolimons?.projected)) continue;
       byCard.set(card, { ...target, ...meta, limited: true, rap, rapSource: "Roblox", copyId: instanceId || userAssetId, serial });
     }
     for (const [card, state] of widgets) {
@@ -400,12 +402,18 @@
     }
     for (const [card, item] of byCard) {
       if (widgets.has(card)) continue;
-      const widget = ui.mountCard(card, item, { priceIsRap: true, linkValue: true });
+      const widget = ui.mountCard(card, item, {
+        priceIsRap: true, linkValue: true,
+        showValue: preferences.tradeItems, indicators: preferences.tradeItems,
+        sales: preferences.tradeItems, projected: preferences.tradeProjected,
+      });
       if (widget) widgets.set(card, { widget, signature: JSON.stringify(item) });
     }
   }
 
   function scan() {
+    if (!preferences?.enabled ||
+        !(preferences.tradeComparisons || preferences.tradeItems || preferences.tradeProjected)) return;
     const next = readView();
     const changedSelection = selection?.id !== next.id || selection?.row !== next.row;
     if (changedSelection || !sameOffers(view, next) || view?.isForm !== next.isForm) {
@@ -421,15 +429,41 @@
     const cards = [...(offers?.flatMap((offer) => offer.cards) ?? []), ...next.picker];
     loadMetadata([...cards, ...(offers?.flatMap((offer) => offer.prices) ?? [])]);
     renderCards(cards);
-    const values = offers?.map((offer) => total(offer, "Value"));
-    renderOfferTotals(next.offers, values);
-    if (offers) mountComparison(next, offers, values);
-    else {
+    if (preferences.tradeComparisons) {
+      const values = offers?.map((offer) => total(offer, "Value"));
+      renderOfferTotals(next.offers, values);
+      if (offers) mountComparison(next, offers, values);
+      else {
+        comparison?.remove();
+        comparison = null;
+      }
+      scanRows(next);
+    }
+  }
+
+  RoxolPreferences.watch((next) => {
+    const changed = (key) => next[key] !== preferences?.[key];
+    const enabled = changed("enabled");
+    const cards = changed("tradeItems") || changed("tradeProjected");
+    const totals = changed("tradeComparisons");
+    preferences = next;
+    if (enabled || cards) {
+      ui.closeDialog();
+      renderCards([]);
+    }
+    if (enabled || totals) {
+      renderOfferTotals([]);
       comparison?.remove();
       comparison = null;
+      for (const { summary } of rowSummaries.values()) summary?.remove();
+      rowSummaries.clear();
     }
-    scanRows(next);
-  }
+    if (!next.enabled) {
+      selection = priorDetail = view = null;
+      return;
+    }
+    if (enabled || cards || totals) scan();
+  });
 
   function touchesTrade({ target, addedNodes, removedNodes }) {
     const node = target.nodeType === Node.TEXT_NODE ? target.parentElement : target;
@@ -457,5 +491,4 @@
   }
   window.addEventListener("popstate", scan);
   window.navigation?.addEventListener("currententrychange", scan);
-  scan();
 })();

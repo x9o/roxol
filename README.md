@@ -12,14 +12,14 @@ Roxol is a Chrome and Edge extension for Roblox limited items and trading. It us
 - **Overpay** on limited Marketplace asset pages. Compare raw trade statistics and filtered market-rate estimates for one-for-one and one-for-many RoUtility exchanges, with pricing coverage, confidence, and a downloadable sample audit.
 - **Item trade history** from RoUtility. Select **View trades** on a Roblox Marketplace asset page to compare item baskets, current Rolimon's totals, and overpay side by side. Expand a record for RoUtility's observation details, RAP, and Value. A local report resolves historical Rolimon's valuations and gives per-item swap, upgrade, and downgrade overpay statistics for exported trades.
 - **Reference links** to Rolimon's item, bundle, sales, and player pages. Trade offers and the inventory picker show an external link beside each item's Rolimon's value.
-- **Toolbar popup and settings** with Roblox sign-in status, Trades tab detection, an **Open Trades** shortcut, and a saved system, light, or dark appearance preference.
+- **Toolbar popup and settings** with Roblox sign-in status, Trades tab detection, an **Open Trades** shortcut, and preferences grouped by feature.
 
 ## Planned features
 
 - **Expanded trade analysis** with partner inventory value when available and gross and net Robux after Roblox fees.
 - **Trade navigation and search** with a **Send** shortcut beside **Counter**, links to Rolimon's item and player pages, and copy-specific ownership history when available. Search both inventories by item name or acronym, filter by demand, hold status, or serial where supported, and select the exact copy.
 - **Pending-trade inventory checks** for both sides, with per-copy ownership and tradability status, a timestamp, and a **Check again** action.
-- **Desktop trade alerts and settings** with separate opt-ins for inbound, declined, and completed trades, click-through to the relevant trade, a test notification, feature toggles, and an option to hide RAP deltas.
+- **Desktop trade alerts and settings** with separate opt-ins for inbound, declined, and completed trades, click-through to the relevant trade, a test notification, and an option to hide RAP deltas separately.
 - **Per-item USD estimates** from RoUtility where available, with a separate optional estimate using a user-entered rate and live Rolimon's value.
 - **Mass Trade Sender** with offer selection, manual recipient entry, a review queue, progress tracking, and native trade forms for manual sending. Owner discovery is planned once the data is verified.
 
@@ -35,6 +35,19 @@ Enable Developer mode at `chrome://extensions` or `edge://extensions`, then sele
 The limited-card **Copy ID** control is disabled while its implementation is kept for future work.
 
 Roxol reuses item and resale helpers from Nevos. [Nevos source license](extension/vendor/nevos/LICENSE)
+
+## Popup preferences
+
+Open Roxol from the toolbar or from the extension's options page. Preferences are saved in the current browser profile and apply to open Roblox tabs as you change them. Features start enabled. **Auto** follows the Roblox theme for in-page Roxol controls and the browser theme for the popup. **Light** and **Dark** apply to Roxol's controls and surfaces.
+
+| Group | Controls |
+| --- | --- |
+| General | **Enable Roxol** controls all in-page enhancements, including profile and inventory panels. The popup still shows Roblox account status and the **Open Trades** shortcut. |
+| Item pages | **Item value** controls value rows and Best Price comparisons. **Demand and trend indicators** controls demand or daily sales, trend, and related item state badges. **Sales history** controls the preview and full viewer on Marketplace and inventory cards and detail pages. **Overpay estimates** controls the 7-day Marketplace panel. |
+| Trade pages | **Value and RAP comparisons** controls offer totals, deltas, and Roblox trade-list previews. **Item statistics** controls trade and picker card figures, demand and trend, and sales previews. **Projected warnings** controls Rolimon's projected badge independently. |
+| Trade history | From Marketplace **View trades**, **Enhanced trade cards** controls the thumbnail layout. **Additional statistics** controls current valuations, basket totals, overpay, and valuation details. The compact item list and JSON export remain available. |
+
+To verify the preferences, leave a Marketplace listing or a trade open while changing its switches in the toolbar popup or extension options. Check that each corresponding feature updates, then reopen the popup to confirm the settings were saved. In the Marketplace trade history viewer, toggle the card layout and statistics while viewing a page. [Edge CDP verification workflow](AGENTS.md)
 
 ## Trade list previews
 

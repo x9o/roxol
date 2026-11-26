@@ -17,6 +17,8 @@
   let scanTimer;
   let currentPage;
   let pathname;
+  let preferences;
+  let itemOptions;
 
   function itemTarget(anchor) {
     const route = routeOf(anchor.href);
@@ -78,7 +80,7 @@
     const { instanceId, userAssetId, serial } = copy;
     state.copy = JSON.stringify(copy);
     state.widget = ui.mountCard(card, { ...item, ...data, limited: true, copyId: instanceId || userAssetId, serial },
-      { priceIsRap: currentPage.page !== "catalog" });
+      { ...itemOptions, priceIsRap: currentPage.page !== "catalog" });
   }
 
   async function loadVisibleCards() {
@@ -150,7 +152,7 @@
     const limited = data?.limited || !!detail?.querySelector(limitedSelector);
 
     let resale;
-    if (!limited && (!data || data.collectibleId)) {
+    if (!limited && (itemOptions.showValue || itemOptions.sales) && (!data || data.collectibleId)) {
       resale = await ui.request("resale", { item: page });
     }
     if (currentPage !== page || pathname !== location.pathname) return;
@@ -222,7 +224,7 @@
           const name = [...link.parentElement.childNodes]
             .filter((node) => node.nodeType === Node.TEXT_NODE)
             .map((node) => node.textContent).join("").trim();
-          RoxolTradeHistory.open(page.id, name, link.href);
+          page.updateHistory = RoxolTradeHistory.open(page.id, name, link.href, preferences);
         });
         page.tradesLink = link;
         panels.add(link);
@@ -239,14 +241,15 @@
       page.detailRequest ??= loadDetail(page);
       return;
     }
-    if (!page.panel) {
-      const { data, resale, rap } = page.detailData;
-      if (!limited && resale?.rap == null && !resale?.daily?.length) return;
+    const showInsights = itemOptions.showValue || itemOptions.indicators || itemOptions.sales;
+    const { data, resale, rap } = page.detailData;
+    if (!page.panel && showInsights && (limited || resale?.rap != null || resale?.daily?.length)) {
       page.panel = ui.itemPanel({
         kind: page.kind, id: page.id, ...data, limited: true,
         rap,
         checkedAt: resale?.checkedAt ?? data?.checkedAt,
       }, {
+        ...itemOptions,
         getBestPrice: () => page.bestPrice,
         onRap(rap) {
           if (currentPage !== page || pathname !== location.pathname) return;
@@ -256,15 +259,17 @@
       });
       panels.add(page.panel);
     }
-    mountBestPriceDeals(page, detail);
+    if (!limited && !page.panel) return;
+    if (itemOptions.showValue) mountBestPriceDeals(page, detail);
     const valueAnchor = page.deals?.previousElementSibling === anchor ? page.deals : anchor;
-    if (page.panel.previousElementSibling !== valueAnchor) valueAnchor.after(page.panel);
-    if (!page.overpayPanel && page.kind === "asset" && limited) {
+    if (page.panel && page.panel.previousElementSibling !== valueAnchor) valueAnchor.after(page.panel);
+    if (preferences.itemOverpay && !page.overpayPanel && page.kind === "asset" && limited) {
       page.overpayPanel = RoxolOverpay.mount(page.id);
       panels.add(page.overpayPanel);
     }
-    if (page.overpayPanel && page.overpayPanel.previousElementSibling !== page.panel) {
-      page.panel.after(page.overpayPanel);
+    const overpayAnchor = page.panel || valueAnchor;
+    if (page.overpayPanel && page.overpayPanel.previousElementSibling !== overpayAnchor) {
+      overpayAnchor.after(page.overpayPanel);
     }
     mountTitleLink(page, title, "View item on Rolimon’s", ui.rolimonsItemUrl(page));
   }
@@ -366,7 +371,7 @@
     }
 
     function openBreakdown() {
-      paintDialog = ui.inventoryView(model, loadPage, badges);
+      paintDialog = ui.inventoryView(model, loadPage, badges, itemOptions);
     }
     rap.addEventListener("click", openBreakdown);
     value.addEventListener("click", openBreakdown);
@@ -422,11 +427,12 @@
 
   function scan() {
     scanTimer = null;
+    if (!preferences?.enabled) return;
     if (pathname !== location.pathname) resetPage();
     if (!currentPage) return;
     if (currentPage.page === "detail") mountDetail(currentPage);
     if (currentPage.page === "profile" || currentPage.page === "inventory") mountProfile(currentPage);
-    scanCards();
+    if (itemOptions.showValue || itemOptions.indicators || itemOptions.sales) scanCards();
   }
 
   function scheduleScan() {
@@ -443,5 +449,25 @@
   }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true,
     attributeFilter: ["href", "data-collectibleiteminstanceid", "data-collectible-item-instance-id",
       "data-user-asset-id", "data-userassetid", "user-asset-id", "data-serial-number", "data-serialnumber"] });
-  scan();
+  RoxolPreferences.watch((next) => {
+    const changed = (key) => next[key] !== preferences?.[key];
+    const reset = changed("enabled") || ["itemValue", "itemIndicators", "itemSales"].some(changed);
+    const overpayChanged = changed("itemOverpay") && currentPage?.page === "detail";
+    if (changed("historyCards") || changed("historyStats")) currentPage?.updateHistory?.(next);
+    preferences = next;
+    itemOptions = {
+      showValue: next.itemValue, indicators: next.itemIndicators, sales: next.itemSales, projected: next.itemIndicators,
+    };
+    if (reset) {
+      resetPage();
+      scheduleScan();
+    } else if (overpayChanged) {
+      if (!next.itemOverpay && currentPage.overpayPanel) {
+        currentPage.overpayPanel.remove();
+        panels.delete(currentPage.overpayPanel);
+        currentPage.overpayPanel = null;
+      }
+      scheduleScan();
+    }
+  });
 })();

@@ -19,15 +19,19 @@ const RoxolTradeHistory = (() => {
     return total || null;
   }
 
-  function basket(items, assetId, label, total, prices) {
+  function basket(items, assetId, label, total, prices, { historyCards, historyStats }) {
     const side = element("div", "roxol-trade-basket");
     const heading = element("h3", "roxol-basket-heading");
-    heading.append(element("span", "", label), element("strong", "roxol-number", amount(total)));
+    heading.append(element("span", "", label));
+    if (historyStats) heading.append(element("strong", "roxol-number", amount(total)));
     const list = element("ul", "roxol-basket-items");
     for (const item of items) {
       const row = element("li", "roxol-basket-item");
-      const thumb = element("span", "roxol-basket-thumbnail");
-      if (item.assetId) thumb.dataset.assetId = item.assetId;
+      if (historyCards) {
+        const thumb = element("span", "roxol-basket-thumbnail");
+        if (item.assetId) thumb.dataset.assetId = item.assetId;
+        row.append(thumb);
+      }
       const title = element("div", "roxol-basket-name");
       const name = itemName(item);
       if (item.assetId === assetId) {
@@ -38,10 +42,13 @@ const RoxolTradeHistory = (() => {
         title.append(element("span", "", name));
       }
       if (item.quantity > 1) title.append(element("span", "roxol-history-note", ` ×${ui.format(item.quantity)}`));
-      const price = prices[item.assetId];
-      const value = element("div", "roxol-basket-value roxol-number", amount(price?.value));
-      value.append(element("small", "roxol-history-note", price?.method === "assigned-value" ? "Value" : price ? "RAP" : "Unpriced"));
-      row.append(thumb, title, value);
+      row.append(title);
+      if (historyStats) {
+        const price = prices[item.assetId];
+        const value = element("div", "roxol-basket-value roxol-number", amount(price?.value));
+        value.append(element("small", "roxol-history-note", price?.method === "assigned-value" ? "Value" : price ? "RAP" : "Unpriced"));
+        row.append(value);
+      }
       list.append(row);
     }
     side.append(heading, list);
@@ -73,7 +80,7 @@ const RoxolTradeHistory = (() => {
     return table;
   }
 
-  function tradeRecord(trade, assetId, prices) {
+  function tradeRecord(trade, assetId, prices, preferences) {
     const article = element("article", "roxol-history-record");
     const caption = element("div", "roxol-history-caption");
     if (trade.lastObservedAt || trade.firstObservedAt) {
@@ -84,16 +91,20 @@ const RoxolTradeHistory = (() => {
     } else {
       caption.append(element("span", "", "Observation time unavailable"));
     }
-    const totalA = basketTotal(trade.sideA, prices);
-    const totalB = basketTotal(trade.sideB, prices);
-    const op = totalA == null || totalB == null ? null : totalB - totalA;
+    const totalA = preferences.historyStats ? basketTotal(trade.sideA, prices) : null;
+    const totalB = preferences.historyStats ? basketTotal(trade.sideB, prices) : null;
     if (trade.inferred) caption.append(element("span", "", "Inferred"));
+    const sides = element("div", "roxol-basket-pair");
+    sides.append(basket(trade.sideA, assetId, "Side A", totalA, prices, preferences),
+      basket(trade.sideB, assetId, "Side B", totalB, prices, preferences));
+    article.append(caption, sides);
+    if (!preferences.historyStats) return article;
+
+    const op = totalA == null || totalB == null ? null : totalB - totalA;
     if (op == null) caption.append(element("span", "", "Unpriced trade"));
     else if (Math.max(totalA, totalB) / Math.min(totalA, totalB) > 2) {
       caption.append(element("span", "", "Severe imbalance"));
     }
-    const sides = element("div", "roxol-basket-pair");
-    sides.append(basket(trade.sideA, assetId, "Side A", totalA, prices), basket(trade.sideB, assetId, "Side B", totalB, prices));
     const comparison = element("dl", "roxol-stat-grid roxol-history-comparison");
     comparison.append(stat("OP (B − A)", figure(op)), stat("OP % of A", figure(op == null ? null : op / totalA, true)));
     const details = element("details", "roxol-disclosure roxol-history-details");
@@ -101,7 +112,7 @@ const RoxolTradeHistory = (() => {
     tables.append(valuationTable(trade.sideA, "Side A · RoUtility observations"),
       valuationTable(trade.sideB, "Side B · RoUtility observations"));
     details.append(element("summary", "", "Valuation details"), tables);
-    article.append(caption, sides, comparison, details);
+    article.append(comparison, details);
     return article;
   }
 
@@ -138,7 +149,7 @@ const RoxolTradeHistory = (() => {
     ui.downloadJson(`roxol-trades-${assetId}.json`, report);
   }
 
-  function open(assetId, name, sourceUrl) {
+  function open(assetId, name, sourceUrl, preferences) {
     const body = ui.showDialog(name ? `Trade history · ${name}` : "Trade history");
     const dialog = body.parentElement;
     dialog.classList.add("roxol-trade-history");
@@ -165,6 +176,25 @@ const RoxolTradeHistory = (() => {
     let current;
     let requestedPage;
 
+    function pageStatus(result) {
+      if (!result.total) return "No tracked trades.";
+      const label = `Page ${ui.format(result.page)} of ${ui.format(result.pages)} · ${ui.format(result.total)} tracked`;
+      return preferences.historyStats && result.pricingUnavailable && result.trades.length
+        ? `${label} · Rolimon’s prices unavailable` : label;
+    }
+
+    function paint() {
+      dialog.classList.toggle("roxol-history-compact", !preferences.historyCards);
+      dialog.classList.toggle("roxol-history-without-stats", !preferences.historyStats);
+      note.hidden = !preferences.historyStats;
+      if (!current) return;
+      records.replaceChildren(...current.trades.map((trade) => tradeRecord(trade, assetId, current.prices, preferences)));
+      if (preferences.historyCards) void loadThumbnails(records, assetId);
+      if (current.total && !current.trades.length) {
+        records.append(element("p", "roxol-history-note", "No two-sided trade records on this page."));
+      }
+    }
+
     async function load(page) {
       requestedPage = page;
       previous.disabled = next.disabled = retry.hidden = true;
@@ -184,17 +214,9 @@ const RoxolTradeHistory = (() => {
         current = result;
         visited.set(result.page, result);
         exportButton.disabled = ![...visited.values()].some((entry) => entry.trades.length);
-        status.textContent = !result.total ? "No tracked trades."
-          : `Page ${ui.format(result.page)} of ${ui.format(result.pages)} · ${ui.format(result.total)} tracked`;
-        if (result.pricingUnavailable && result.trades.length) {
-          status.textContent += " · Rolimon’s prices unavailable";
-          retry.hidden = false;
-        }
-        records.replaceChildren(...result.trades.map((trade) => tradeRecord(trade, assetId, result.prices)));
-        void loadThumbnails(records, assetId);
-        if (result.total && !result.trades.length) {
-          records.append(element("p", "roxol-history-note", "No two-sided trade records on this page."));
-        }
+        status.textContent = pageStatus(result);
+        retry.hidden = !(preferences.historyStats && result.pricingUnavailable && result.trades.length);
+        paint();
       }
       previous.disabled = !current || current.page <= 1;
       next.disabled = !current || current.page >= current.pages;
@@ -204,7 +226,17 @@ const RoxolTradeHistory = (() => {
     next.addEventListener("click", () => { void load(current.page + 1); });
     retry.addEventListener("click", () => { void load(requestedPage); });
     exportButton.addEventListener("click", () => download(assetId, sourceUrl, visited));
+    paint();
     void load(1);
+    return (next) => {
+      if (!dialog.open || !dialog.isConnected) return;
+      preferences = next;
+      if (current && !status.hasAttribute("data-loading") && requestedPage === current.page) {
+        status.textContent = pageStatus(current);
+        retry.hidden = !(preferences.historyStats && current.pricingUnavailable && current.trades.length);
+      }
+      paint();
+    };
   }
 
   return { open };

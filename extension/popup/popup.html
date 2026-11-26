@@ -1,43 +1,67 @@
 <!doctype html>
-<html lang="en" data-theme="system">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <title>Roxol settings</title>
     <link rel="icon" href="../assets/roxol-32.png" />
+    <link rel="stylesheet" href="../content/market.css" />
     <link rel="stylesheet" href="popup.css" />
     <script src="../shared/market_targets.js" defer></script>
     <script src="../shared/trades.js" defer></script>
+    <script src="../shared/preferences.js" defer></script>
     <script src="popup.js" defer></script>
   </head>
-  <body>
+  <body class="roxol-market">
     <main>
-      <header class="masthead">
-        <h1>Roxol</h1>
+      <header class="account">
+        <h1><img src="../assets/roxol-32.png" alt="" width="24" height="24" /> Roxol</h1>
+        <a class="roxol-button trades-link" id="open-trades" target="_blank" rel="noopener noreferrer">
+          Open Trades <span class="roxol-external-icon" aria-hidden="true"></span>
+        </a>
+        <p id="account-status" role="status">Checking Roblox session&hellip;</p>
+        <p id="page-status" hidden>Roxol is active on this Trades tab.</p>
       </header>
 
-      <section class="trade-panel" aria-labelledby="trade-heading">
-        <h2 id="trade-heading">Roblox Trades</h2>
-        <p id="account-status" role="status">Checking Roblox session…</p>
-        <p id="page-status" hidden>Roxol is active on this Trades tab.</p>
-        <a id="open-trades" target="_blank" rel="noopener noreferrer">
-          Open Trades <span aria-hidden="true">↗</span>
-        </a>
-      </section>
+      <form aria-label="Preferences">
+        <fieldset>
+          <legend>General</legend>
+          <div class="preference-row">
+            <label for="appearance">Appearance</label>
+            <select class="roxol-button" id="appearance" name="appearance" disabled>
+              <option value="system">Auto</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+          <label class="preference-row">Enable Roxol <input type="checkbox" role="switch" name="enabled" disabled /></label>
+        </fieldset>
 
-      <section class="preferences" aria-labelledby="preferences-heading">
-        <h2 id="preferences-heading">Preferences</h2>
-        <div class="preference-row">
-          <label for="theme">Appearance</label>
-          <select id="theme" disabled>
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </div>
+        <fieldset data-feature>
+          <legend>Item pages</legend>
+          <label class="preference-row">Item value <input type="checkbox" role="switch" name="itemValue" disabled /></label>
+          <label class="preference-row">Demand and trend indicators <input type="checkbox" role="switch" name="itemIndicators" disabled /></label>
+          <label class="preference-row">Sales history <input type="checkbox" role="switch" name="itemSales" disabled /></label>
+          <label class="preference-row">Overpay estimates <input type="checkbox" role="switch" name="itemOverpay" disabled /></label>
+        </fieldset>
+
+        <fieldset data-feature>
+          <legend>Trade pages</legend>
+          <label class="preference-row">Value and RAP comparisons <input type="checkbox" role="switch" name="tradeComparisons" disabled /></label>
+          <label class="preference-row">Item statistics <input type="checkbox" role="switch" name="tradeItems" disabled /></label>
+          <label class="preference-row">Projected warnings <input type="checkbox" role="switch" name="tradeProjected" disabled /></label>
+        </fieldset>
+
+        <fieldset data-feature aria-describedby="history-source">
+          <legend>Trade history</legend>
+          <p id="history-source">Marketplace &rsaquo; View trades</p>
+          <label class="preference-row">Enhanced trade cards <input type="checkbox" role="switch" name="historyCards" disabled /></label>
+          <label class="preference-row">Additional statistics <input type="checkbox" role="switch" name="historyStats" disabled /></label>
+        </fieldset>
+
         <p id="settings-status" role="status" hidden></p>
-      </section>
+      </form>
     </main>
   </body>
 </html>

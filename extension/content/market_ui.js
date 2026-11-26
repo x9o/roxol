@@ -35,7 +35,8 @@ const RoxolMarketUI = (() => {
   let positionActivePreview;
   let positionActiveSale;
   let activeCardTooltip;
-  let itemPanelCount = 0;
+  let salesPreviewCount = 0;
+  let cardAnchorCount = 0;
 
   function positionSalesOverlays() {
     positionActivePreview?.();
@@ -263,7 +264,7 @@ const RoxolMarketUI = (() => {
     return ["", "At RAP"];
   }
 
-  function itemBadges(meta, dailySales, { activityOnly = false } = {}) {
+  function itemBadges(meta, dailySales, { activityOnly = false, indicators = true, projected = true } = {}) {
     const badges = element("ul", "roxol-badges");
     const add = (text, title, { direction = "", iconName, focusable = false } = {}) => {
       const badge = element("li", "roxol-badge", text);
@@ -281,8 +282,9 @@ const RoxolMarketUI = (() => {
       }
       badges.append(badge);
     };
-    if (!activityOnly && meta?.rare) add("Rare", "Rare by Rolimon’s");
-    if (!activityOnly && meta?.projected) add("Projected", "Projected by Rolimon’s");
+    if (!activityOnly && indicators && meta?.rare) add("Rare", "Rare by Rolimon’s");
+    if (!activityOnly && projected && meta?.projected) add("Projected", "Projected by Rolimon’s");
+    if (!indicators) return badges;
     if (meta?.demand) add(`${meta.demand} demand`, "Demand · Rolimon’s", { iconName: "demand" });
     else dailySales?.then((figure) => {
       if (figure) add(`${figure} sales/day`, dailySalesTooltip, { focusable: true });
@@ -345,19 +347,22 @@ const RoxolMarketUI = (() => {
     return badge;
   }
 
-  function cardState(meta) {
+  function cardState(meta, { indicators = true, projected = true }) {
+    const warning = projected && meta?.projected;
+    if (!indicators && !warning) return null;
+    if (!indicators) return cardBadge("Projected · Rolimon’s", "state-warning", "state");
     const trend = meta?.trend ? `Published trend · Rolimon’s: ${meta.trend}` : "";
     const signal = meta?.signal;
     const forecast = signal && (signal.direction === "raise" ? "Might raise" : "Might drop");
     const labels = [
-      meta?.projected ? "Projected · Rolimon’s" : "",
+      warning ? "Projected · Rolimon’s" : "",
       forecast ? `${forecast} · Roxol RAP estimate (possible value ${format(signal.target)})` : "",
       trend,
     ].filter(Boolean);
-    const iconName = meta?.projected ? "state-warning" : forecast
+    const iconName = warning ? "state-warning" : forecast
       ? (signal.direction === "raise" ? "trend-raising" : "trend-lowering")
       : "trend-stable";
-    return cardBadge(labels.join("\n") || (meta?.projected === false ? "Not projected" : "State unknown"), iconName, "state");
+    return cardBadge(labels.join("\n") || (projected && meta?.projected === false ? "Not projected" : "State unknown"), iconName, "state");
   }
 
   function cardValue({ rolimons, rap }) {
@@ -690,7 +695,10 @@ const RoxolMarketUI = (() => {
     });
   }
 
-  function itemPanel(item, { card = false, cardOverlay, nativeLabel, getBestPrice, onRap, linkValue = false } = {}) {
+  function itemPanel(item, {
+    card = false, cardOverlay, nativeLabel, getBestPrice, onRap, linkValue = false,
+    showValue = true, indicators = true, sales = true, projected = true,
+  } = {}) {
     const panel = element("div", `roxol-market roxol-item ${card ? "roxol-card" : "roxol-item-detail clearfix item-info-row-container"}`);
     panel.dataset.roxolItem = keyOf(item);
     panel.setAttribute("role", "group");
@@ -698,9 +706,9 @@ const RoxolMarketUI = (() => {
     const rap = metric("RAP", "robux", item.rap);
     const meta = item.rolimons;
     const target = { kind: item.kind, id: item.id };
-    const dailySales = meta?.demand ? null : request("daily-sales", { item: target }).then(({ average } = {}) =>
+    const dailySales = !indicators || meta?.demand ? null : request("daily-sales", { item: target }).then(({ average } = {}) =>
       Number.isFinite(average) && average >= 0 ? dailySalesFormat.format(average) : null);
-    if (cardOverlay) {
+    if (cardOverlay && indicators) {
       if (meta?.demand) {
         const badge = cardBadge(`Demand: ${meta.demand}`, "demand", "demand");
         badge.dataset.demand = meta.demand.toLowerCase();
@@ -729,7 +737,7 @@ const RoxolMarketUI = (() => {
         value.row.title = `${meta?.rap != null || meta?.fallbackValue != null ? "Rolimon’s" : "Roblox"} ${result.label} · no assigned value`;
       }
     }
-    if (linkValue) {
+    if (showValue && linkValue) {
       const itemLink = titleLink("View item on Rolimon’s", rolimonsItemUrl(item));
       itemLink.classList.add("roxol-value-link");
       itemLink.textContent = "↗";
@@ -748,44 +756,35 @@ const RoxolMarketUI = (() => {
     history.title = "Sales history";
     history.prepend(symbol("history"));
     const provider = link("Rolimon’s ↗", rolimonsItemUrl(item), true);
-    actions.append(history);
+    if (sales) actions.append(history);
     if (card) {
-      const metrics = element("dl", "roxol-metrics roxol-item-value");
-      if (nativeLabel) metrics.append(metric(nativeLabel, "robux", item.rap).row);
-      metrics.append(value.row);
-      panel.append(metrics);
-      if (!cardOverlay) panel.append(itemBadges(meta, dailySales, { activityOnly: true }));
-      (cardOverlay || panel).append(actions);
+      if (showValue) {
+        const metrics = element("dl", "roxol-metrics roxol-item-value");
+        if (nativeLabel) metrics.append(metric(nativeLabel, "robux", item.rap).row);
+        metrics.append(value.row);
+        panel.append(metrics);
+      }
+      if (!cardOverlay && indicators) panel.append(itemBadges(meta, dailySales, { activityOnly: true }));
+      if (sales) (cardOverlay || panel).append(actions);
+      panel.hidden = !panel.childElementCount;
     } else {
-      const label = element("div", "font-header-1 text-subheader text-label row-label", "Value");
       const content = element("div", "row-content roxol-value-content");
-      const amount = element("div", "roxol-native-value", value.figure.textContent);
-      amount.title = value.row.title;
-      amount.prepend(icon("rolimons"));
-      content.append(amount, itemBadges(meta, dailySales), actions);
-      panel.append(label, content);
+      if (showValue || indicators) {
+        panel.append(element("div", "font-header-1 text-subheader text-label row-label",
+          showValue ? "Value" : "Item indicators"));
+      }
+      if (showValue) {
+        const amount = element("div", "roxol-native-value", value.figure.textContent);
+        amount.title = value.row.title;
+        amount.prepend(icon("rolimons"));
+        content.append(amount);
+      }
+      if (indicators || projected) content.append(itemBadges(meta, dailySales, { indicators, projected }));
+      if (sales) content.append(actions);
+      panel.append(content);
     }
 
-    const preview = element("section", "roxol-sales-preview");
-    preview.setAttribute("popover", "auto");
-    preview.setAttribute("aria-label", "Recent sales");
-    preview.id = `roxol-sales-${++itemPanelCount}`;
-    history.setAttribute("aria-controls", preview.id);
-    const previewMetrics = element("dl", "roxol-metrics");
-    previewMetrics.append(rap.row);
-    const previewBody = element("div", "roxol-preview-body");
-    const more = button("Full sales history");
-    const footer = element("div", "roxol-actions roxol-preview-footer");
-    footer.append(more, card ? provider : rolimonsSalesLink(item));
-    preview.append(element("h3", "", "Recent sales"), previewMetrics);
-    if (card) preview.append(itemBadges(meta, dailySales));
-    preview.append(previewBody, footer);
-    (cardOverlay || panel).append(preview);
-    if (card) {
-      panel.addEventListener("click", (event) => {
-        if (event.target.closest("button, a")) event.stopPropagation();
-      });
-    }
+    // A detail value row can still use the resolved RAP for its Best Price comparison.
     let resale;
     function getResale() {
       resale ??= request("resale", { item: target }).then((result) => {
@@ -807,8 +806,29 @@ const RoxolMarketUI = (() => {
     }
 
     if (item.rap != null) updateRap(item.rap, item.checkedAt, item.rapSource);
-    else if (item.limited && !cardOverlay) void getResale();
+    else if (item.limited && !cardOverlay && (sales || (showValue && onRap))) void getResale();
+    if (!sales) return panel;
 
+    const preview = element("section", "roxol-sales-preview");
+    preview.setAttribute("popover", "auto");
+    preview.setAttribute("aria-label", "Recent sales");
+    preview.id = `roxol-sales-${++salesPreviewCount}`;
+    history.setAttribute("aria-controls", preview.id);
+    const previewMetrics = element("dl", "roxol-metrics");
+    previewMetrics.append(rap.row);
+    const previewBody = element("div", "roxol-preview-body");
+    const more = button("Full sales history");
+    const footer = element("div", "roxol-actions roxol-preview-footer");
+    footer.append(more, card ? provider : rolimonsSalesLink(item));
+    preview.append(element("h3", "", "Recent sales"), previewMetrics);
+    if (card && (indicators || projected)) preview.append(itemBadges(meta, dailySales, { indicators, projected }));
+    preview.append(previewBody, footer);
+    (cardOverlay || panel).append(preview);
+    if (card) {
+      panel.addEventListener("click", (event) => {
+        if (event.target.closest("button, a")) event.stopPropagation();
+      });
+    }
     let pendingSales;
     function getSales() {
       pendingSales ??= request("sales", { item: target }).finally(() => { pendingSales = null; });
@@ -856,22 +876,31 @@ const RoxolMarketUI = (() => {
   // Vaulted until the copy ID control can reliably copy the correct ID.
   const showCardCopyId = false;
 
-  function mountCard(card, item, { nativeLabel = "Roblox RAP", priceIsRap = false, linkValue = false } = {}) {
+  function mountCard(card, item, {
+    nativeLabel = "Roblox RAP", priceIsRap = false, linkValue = false,
+    showValue = true, indicators = true, sales = true, projected = true,
+  } = {}) {
     const image = card.querySelector("img");
     const thumbnail = card.querySelector(thumbnailSelector) || (image?.parentElement !== card ? image?.parentElement : null);
     if (!thumbnail) return null;
     const price = card.querySelector(cardPriceSelector);
     const priceText = price?.textContent;
     const name = card.querySelector(".item-card-name, .item-name, [data-testid='item-name']");
-    const nativePrice = price && (priceIsRap ? /^\s*\d+(?:[,.'’\s]\d{3})*\s*$/.test(priceText)
+    const nativePrice = showValue && price && (priceIsRap ? /^\s*\d+(?:[,.'’\s]\d{3})*\s*$/.test(priceText)
       : /\d|^\s*free\s*$/i.test(priceText));
     const overlay = element("div", "roxol-market roxol-card-overlay");
-    overlay.append(cardState(item.rolimons));
+    const state = cardState(item.rolimons, { indicators, projected });
+    if (state) overlay.append(state);
+    overlay.hidden = !state && !indicators && !sales && !showCardCopyId;
+    overlay.classList.toggle("roxol-card-without-sales", !sales);
     if (showCardCopyId && item.copyId) {
       const label = item.serial ? `#${item.serial}` : /^\d+$/.test(item.copyId) ? `ID ${item.copyId}` : "Copy ID";
       overlay.append(cardBadge(`${item.serial ? `Serial #${item.serial}\n` : ""}Copy ID: ${item.copyId}`, null, "copy", label));
     }
-    const panel = itemPanel(item, { card: true, cardOverlay: overlay, nativeLabel: nativePrice ? null : nativeLabel, linkValue });
+    const panel = itemPanel(item, {
+      card: true, cardOverlay: overlay, nativeLabel: nativePrice ? null : nativeLabel, linkValue,
+      showValue, indicators, sales, projected,
+    });
     const anchor = price || name;
     const nativeWrapper = linkValue && (anchor || card).closest("a, button");
     if (nativeWrapper) nativeWrapper.after(panel);
@@ -890,7 +919,7 @@ const RoxolMarketUI = (() => {
     const anchored = link && CSS.supports("top", "anchor(top)");
     const oldAnchor = thumbnail.style.getPropertyValue("anchor-name");
     if (anchored) {
-      const anchorName = `--roxol-thumbnail-${itemPanelCount}`;
+      const anchorName = `--roxol-thumbnail-${++cardAnchorCount}`;
       thumbnail.style.setProperty("anchor-name", anchorName);
       overlay.style.setProperty("position-anchor", anchorName);
       overlay.classList.add("roxol-card-anchored");
@@ -930,7 +959,7 @@ const RoxolMarketUI = (() => {
     };
   }
 
-  function inventoryView(model, loadPage, badges) {
+  function inventoryView(model, loadPage, badges, itemOptions) {
     const body = showDialog("Collectible inventory");
     const totals = element("div", "roxol-inventory-totals");
     const rap = element("strong");
@@ -958,7 +987,10 @@ const RoxolMarketUI = (() => {
       for (const item of model.items.slice(displayed)) {
         const row = rows.insertRow();
         const name = row.insertCell();
-        name.append(link(item.name, robloxItemUrl(item), true), itemPanel(item, { card: true }));
+        name.append(link(item.name, robloxItemUrl(item), true));
+        if (itemOptions.showValue || itemOptions.indicators || itemOptions.sales) {
+          name.append(itemPanel(item, { ...itemOptions, card: true }));
+        }
         row.insertCell().textContent = item.serial ? `#${item.serial}` : "—";
       }
       displayed = model.items.length;
