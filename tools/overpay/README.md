@@ -45,14 +45,11 @@ node tools/overpay/resolve-trades.mjs trades.json valued-trades.json --completed
 node tools/overpay/validate-trades.mjs trades.json pilot.json audit.json
 node tools/overpay/item-overpay.test.mjs
 node tools/overpay/overpay-sampling.test.mjs
-node tools/overpay/market-profile-retries.test.mjs
 ```
 
 Open `itemOverpay.items[assetId]` in the valuation report. Each group's `recent` window covers the last 30 days and `allObserved` covers observations supplied in the input. Exported pages determine how much of each window is represented.
 
-The Marketplace sampler fixes its sample before pricing. It uses RoUtility's newest-first first-observation order and stops at the 30-day boundary, the end of history, or 500 records. **Download sample audit** includes all sampled records in `audit`, with eligibility exclusions, per-trade pricing failures, and imbalance flags. The top-level `exclusions` tallies eligibility reasons and `trades` contains the eligible records for the standalone resolver.
-
-The extension checks IndexedDB for needed profiles and applies historical prices through each profile's fetch time. One shared queue spaces new profile requests at least 2.5 seconds apart and caps them at 24 per rolling minute. A provider 429 pauses the queue until `Retry-After`, with a 60-second fallback when the header is missing or invalid. Network errors, timeouts, and transient HTTP failures get up to two retries, after 15 and 45 seconds. Deferred lookups carry no HTTP status of their own. The panel shows live priced, pending, and unavailable counts and automatically resumes work while open. A trade stays unpriced when any item lacks sufficient dated evidence.
+The Marketplace widget and its sample audit cover the most recent seven days of first observations, up to 500 RoUtility records. The widget uses the price snapshots on those records and stores up to 12 complete samples locally for two-minute reuse across tabs and worker restarts. The audit’s `trades` array contains eligible records for the standalone historical resolver. The audit’s `groups` show the widget’s snapshot-based results. [Marketplace calculation and cache](../../README.md#item-overpay)
 
 The standalone valuation report works from the supplied export and uses the end of each observation interval for its recent window. Its `normalizationExclusions` and `excludedRecords` preserve duplicate and malformed inputs that could not be normalized into `trades`. The `profileFailures` map carries reason codes and observed HTTP statuses by asset ID. Individual resolved records include the severe-imbalance flag and historical valuation gaps by item row.
 
@@ -62,9 +59,13 @@ The standalone valuation report works from the supplied export and uses the end 
 - Standard market-rate confidence requires at least 30 retained trades, at least 80% pricing coverage, and no more than 10% of priced trades severely imbalanced. Fewer than 10 retained trades yields an insufficient-sample label. Other samples have low confidence. Unpriced-reason counts can overlap within a trade.
 - The calculations use item values for all samples. Robux coverage counts priced samples with unknown, proof-reported zero, and proof-reported nonzero Robux. The resolver carries over amounts only from copy-corroborated proofs and records the fee basis when documented. These amounts stay out of the item-only OP calculations.
 
-### Marketplace cold-cache verification
+### Marketplace snapshot verification
 
-The Marketplace Overpay widget shows coverage for the selected trade type. Expand **Estimate details** to inspect raw and filtered sample medians while the headline is preliminary or has insufficient data. That disclosure also contains the sample audit export. The live Trade History viewer totals RoUtility's reported snapshots. The resolver uses historical Rolimon's data. [Marketplace display and verification](../../README.md#item-overpay)
+On November 26, 2026 a fresh headless Edge profile loaded the live Silver King of the Night Marketplace page and displayed the estimate in 8.2 seconds from navigation. RoUtility snapshots priced all 35 eligible trades in each group. The one-for-many group retained 26 trades after the imbalance filter and had a median OP of −5,250. The one-for-one group retained nine trades and displayed insufficient data. The live layout and trade-type switch were checked at 1,440 px and 375 px. Fixture tests check seven-day eligibility, Value and RAP fallback, quantities, missing prices, partial history, cache reuse after worker restart, and refresh after expiration.
+
+### Historical Marketplace cold-cache verification
+
+These measurements used the former Marketplace calculator with Rolimon’s historical profiles.
 
 On November 25, 2026, two live item pages in a fresh headless Edge profile reached 33/133 swaps and 1/117 downgrades for Silver King of the Night (SKOTN), and 31/133 swaps and 2/92 downgrades for The Classic ROBLOX Fedora (CF). The previous scheduler started 24 profile requests in a burst. Sixteen succeeded and eight returned HTTP 429 with `Retry-After` values of 2,791 to 2,792 seconds. The panel retried its history once at the local budget boundary, but sent no new profile requests and showed no coverage gains during the six-minute observation. Neither group for either item reached 80% or 95%. The 429 cooldown prevented further live measurement. The previous sampler also spent the request budget in page order, and transient non-429 failures did not schedule a retry by themselves.
 

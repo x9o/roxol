@@ -109,21 +109,21 @@ const RoxolItemOverpay = (() => {
     return sideA > 0 && sideB > 0 && Math.max(sideA, sideB) / Math.min(sideA, sideB) > imbalanceRatio;
   }
 
-  function targetSample(trade, side, time) {
-    const totals = trade.historicalItemOnlyOverpay;
+  function targetSample(trade, side, time, totals = trade.historicalItemOnlyOverpay, field = "historical") {
     const [target, opposite] = side === 0 ? [totals.sideATotal, totals.sideBTotal] : [totals.sideBTotal, totals.sideATotal];
     // A zero RAP snapshot gives no usable denominator or estimate for a basket.
     const items = [...trade.sideA, ...trade.sideB];
-    const priced = target > 0 && opposite > 0 && items.every(({ historical }) => historical?.value > 0);
+    const priced = target > 0 && opposite > 0 && items.every((item) => item[field]?.value > 0);
     const overpay = priced ? opposite - target : null;
     const robux = [trade.robux?.sideA, trade.robux?.sideB];
-    const pricingFailures = priced ? [] : items.filter(({ historical }) => !(historical?.value > 0))
-      .map(({ assetId, historicalUnavailable }) => ({ assetId, reason: historicalUnavailable ?? "missing-historical-value" }));
+    const pricingFailures = priced ? [] : items.filter((item) => !(item[field]?.value > 0))
+      .map(({ assetId, historicalUnavailable }) => ({ assetId, reason: field === "snapshot" ? "missing-reported-price" :
+        historicalUnavailable ?? "missing-historical-value" }));
     if (!priced && !pricingFailures.length) pricingFailures.push({ reason: "invalid-basket-total" });
     return {
       time, overpay,
       percent: priced ? overpay / target * 100 : null,
-      basis: items.every(({ historical }) => historical?.method === "assigned-value") ? "assigned-value" : "rap",
+      basis: items.every((item) => item[field]?.method === "assigned-value") ? "assigned-value" : "rap",
       imbalanced: priced && severelyImbalanced(target, opposite),
       pricingFailures,
       robux: robux.some((amount) => amount > 0) ? "reported-nonzero" :
@@ -139,8 +139,17 @@ const RoxolItemOverpay = (() => {
     return opposite.length === 1 && opposite[0].quantity === 1 ? "swap" : "downgrade";
   }
 
-  function previewSample(trade, id, time) {
-    return targetSample(trade, isolatedSide([trade.sideA, trade.sideB], id), time);
+  function snapshotSample(trade, side, time) {
+    const { itemOnlyOverpay, amount } = RoxolTradeValuations;
+    function withPrice(item) {
+      const value = amount(item.valueThen);
+      const rap = amount(item.rap);
+      const snapshot = value > 0 ? { value, method: "assigned-value" } : rap > 0 ? { value: rap, method: "rap" } : null;
+      return { ...item, snapshot };
+    }
+    const sideA = trade.sideA.map(withPrice);
+    const sideB = trade.sideB.map(withPrice);
+    return targetSample({ ...trade, sideA, sideB }, side, time, itemOnlyOverpay(sideA, sideB, "snapshot"), "snapshot");
   }
 
   function itemPreview(records, id, now) {
@@ -212,7 +221,7 @@ const RoxolItemOverpay = (() => {
     };
   }
 
-  return { assetCopies, percentile, itemOverpay, itemPreview, previewSample, isolatedSide,
+  return { assetCopies, percentile, itemOverpay, itemPreview, snapshotSample, isolatedSide,
     unusualComposition, tradeGroup, severelyImbalanced, recentDays };
 })();
 

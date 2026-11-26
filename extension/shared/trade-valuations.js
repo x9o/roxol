@@ -188,7 +188,7 @@ const RoxolTradeValuations = (() => {
     });
   }
 
-  return { amount, timestamp, iso, parseHistory, assignmentAt, parseItemProfile, observationWindow, resolveTrades };
+  return { amount, timestamp, iso, parseHistory, assignmentAt, parseItemProfile, observationWindow, itemOnlyOverpay, resolveTrades };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = RoxolTradeValuations;

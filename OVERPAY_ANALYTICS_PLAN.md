@@ -44,7 +44,9 @@ Revisit the sustained **Might drop** forecast and calculators once the pilot est
 
 ## 5. Serve Marketplace estimates within 10 seconds
 
-The extension's cold-cache scheduler is useful for progressive recovery. It cannot support a 10-second target by acquiring profiles on page load. The observed samples needed 172 distinct profiles for SKOTN and 173 for CF to price every eligible trade if all historical evidence existed. At one new profile every 2.5 seconds, each item alone would need over seven minutes to fetch that many profiles, even before provider cooldowns. The live test received a roughly 46-minute cooldown. [Cold-cache results](tools/overpay/README.md#marketplace-cold-cache-verification)
+The Marketplace widget now uses seven days of RoUtility snapshots. The architectures below describe options for serving a separate estimate backed by Rolimon’s historical valuations. [Current Marketplace calculator](README.md#item-overpay)
+
+The previous cold-cache scheduler acquired profiles on page load. The observed samples needed 172 distinct profiles for SKOTN and 173 for CF to price every eligible trade if all historical evidence existed. At one new profile every 2.5 seconds, each item alone would need over seven minutes to fetch that many profiles, even before provider cooldowns. The live test received a roughly 46-minute cooldown. [Cold-cache results](tools/overpay/README.md#historical-marketplace-cold-cache-verification)
 
 | Architecture | Feasibility and serving latency | Cost | Maintenance and accuracy |
 | --- | --- | --- | --- |

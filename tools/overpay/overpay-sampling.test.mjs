@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
+import { runInNewContext } from "node:vm";
 import ItemOverpay from "../../extension/shared/item-overpay.js";
 import TradeValuations from "../../extension/shared/trade-valuations.js";
 import Sampling from "../../extension/shared/overpay-sampling.js";
@@ -7,178 +9,142 @@ import Sampling from "../../extension/shared/overpay-sampling.js";
 Object.assign(globalThis, { RoxolItemOverpay: ItemOverpay, RoxolTradeValuations: TradeValuations });
 const now = Date.parse("2026-11-25T12:00Z");
 const day = 86_400_000;
-const item = (assetId, quantity = 1) => ({ assetId, quantity });
+const item = (assetId, valueThen, rap, quantity = 1) => ({ assetId, quantity, valueThen, rap });
 
-function record(index, { at = now - index * 60_000, group = index % 2, other = group ? "103" : "102" } = {}) {
+function record(index, { at = now - index * 60_000, sideB = [item("102", 110, 20)] } = {}) {
   const id = String(index);
   const firstObservedAt = new Date(at).toISOString();
   return { id, firstObservedAt, trade: {
     tradeId: id, firstObservedAt, lastObservedAt: firstObservedAt,
-    sideA: [item("101")], sideB: [item(other, group ? 2 : 1)],
+    sideA: [item("101", 100, 25)], sideB,
   } };
 }
 
-async function sample(rows, {
-  previous = [], unavailablePage, unavailableProfile, asOf = now, readStoredProfile, profileFailure,
-} = {}) {
+async function sample(rows, { previous, unavailablePage, asOf = now } = {}) {
   const pages = [];
-  const profiles = [];
-  const progress = [];
   const result = await Sampling.sampleItem({
-    assetId: "101", previous, now: asOf, clock: () => asOf, readStoredProfile,
-    onProgress: ({ groups }) => progress.push(Object.fromEntries(Object.entries(groups)
-      .map(([group, { summary }]) => [group, summary.valuationCoverage]))),
+    assetId: "101", previous, now: asOf,
     async readPage(page, limit) {
       pages.push(page);
       assert.equal(limit, 50);
-      return page === unavailablePage ? { status: "unavailable" } : {
+      return page === unavailablePage ? { status: "unavailable", httpStatus: 503 } : {
         status: "ok", pages: Math.ceil(rows.length / limit) || 1, total: rows.length,
         records: rows.slice((page - 1) * limit, page * limit),
       };
     },
-    async readTradeProfile(id) {
-      profiles.push(id);
-      const failure = profileFailure?.(id);
-      if (failure) return failure;
-      const value = { 101: 100, 102: 110, 103: 55, 104: 130 }[id];
-      return value && id !== unavailableProfile ? { profile: { checkedAt: asOf, rap: [], history: {
-        changes: [{ time: now - 100 * day, after: value }],
-      } } } : { profile: null, failure: { reason: "profile-http-error", httpStatus: 429 }, retryAt: asOf + 60_000 };
-    },
   });
-  return { ...result, pages, profiles, progress };
+  return { ...result, pages };
 }
 
-test("sample size is independent of pricing and tracks exclusions and unpriced trades", async () => {
-  const rows = Array.from({ length: 600 }, (_, index) => record(index + 1));
-  rows[1] = { ...rows[0] };
-  rows[3] = record(4, { other: "999" });
-  const result = await sample(rows);
-  assert.equal(result.reason, "cap");
-  assert.deepEqual(result.pages, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-  assert.equal(result.groups.swap.summary.sampleSize, 248);
-  assert.equal(result.groups.swap.history.length, 249);
-  assert.equal(result.groups.downgrade.summary.sampleSize, 250);
-  assert.equal(result.groups.swap.summary.overpay.median, 10);
-  assert.equal(result.groups.swap.summary.overpayPercent.median, 10);
-  assert.equal(result.groups.swap.summary.overpay.iqr, 0);
-  assert.equal(result.groups.swap.history[0].observedAt, rows[3].firstObservedAt);
-  assert.equal(result.pricingIncomplete, true);
-  assert.deepEqual(result.groups.swap.summary.unpricedReasons, { "profile-http-error": 1 });
-  assert.deepEqual(result.groups.swap.history[0].pricingFailures,
-    [{ assetId: "999", reason: "profile-http-error", httpStatus: 429, pending: true }]);
-  assert.equal(result.pricingRetryAt, now + 60_000);
-  assert.deepEqual(result.exclusions, { "duplicate-trade": 1 });
-  assert.equal(result.audit.length, 500);
-});
-
-test("low demand stops at the 30-day boundary and rare history stops at the end of the feed", async () => {
-  const rows = Array.from({ length: 60 }, (_, index) => record(index + 1, { group: 0 }));
-  rows[55] = record(56, { at: now - 30 * day, group: 0, other: "999" });
-  const low = await sample(rows);
-  assert.deepEqual(low.pages, [1, 2]);
-  assert.equal(low.reason, "date");
-  assert.equal(low.groups.swap.summary.sampleSize, 55);
-  assert.equal(low.audit.length, 60);
-  assert.deepEqual(low.exclusions, { "outside-window": 5 });
-  assert.ok(!low.profiles.includes("999"));
-  for (const [count, confidence] of [[0, "insufficient"], [9, "insufficient"], [10, "low"], [29, "low"], [30, "standard"]]) {
-    const result = await sample(rows.slice(0, count));
-    assert.equal(result.reason, "end");
-    assert.equal(result.groups.swap.summary.sampleSize, count);
-    assert.equal(result.groups.swap.summary.confidence, confidence);
-  }
-});
-
-test("raw cap counts ineligible records and stops after ten requests", async () => {
-  const rows = Array.from({ length: 550 }, (_, index) => ({ ...record(index + 1), trade: null }));
-  const result = await sample(rows);
-  assert.equal(result.reason, "cap");
-  assert.equal(result.records.length, 500);
-  assert.equal(result.pages.length, 10);
-  assert.equal(result.profiles.length, 0);
-});
-
-test("unavailable focal pricing skips counterpart lookups and can recover on refresh", async () => {
-  const rows = [record(1), record(2)];
-  const first = await sample(rows, { unavailableProfile: "101" });
-  assert.deepEqual(first.profiles, ["101"]);
-  assert.equal(first.pricingIncomplete, true);
-  assert.equal(first.groups.swap.summary.sampleSize, 0);
-  assert.equal(first.groups.swap.history.length, 1);
-  assert.deepEqual(first.groups.swap.summary.unpricedReasons,
-    { "profile-http-error": 1, "deferred-profile-lookup": 1 });
-
-  const again = await sample(rows, { previous: first.records, asOf: now + 120_000 });
-  assert.equal(again.pricingIncomplete, false);
-  assert.equal(again.groups.swap.summary.sampleSize, 1);
-});
-
-test("refresh uses cached history and prices only new or changed records", async () => {
-  const rows = Array.from({ length: 240 }, (_, index) => record(index + 1));
-  const cold = await sample(rows);
-  const newTrade = record(0, { other: "104" });
-  const changed = record(2, { other: "104" });
-  const warm = await sample([newTrade, rows[0], changed, ...rows.slice(2)], { previous: cold.records });
-  assert.deepEqual(warm.pages, [1]);
-  assert.deepEqual(warm.profiles, ["101", "104"]);
-  assert.equal(warm.groups.swap.summary.sampleSize, 121);
-  assert.deepEqual(warm.groups.swap.history.slice(0, 2).map(({ overpay }) => overpay), [30, 30]);
-});
-
-test("refresh resumes beyond a cached tail and discards aged-out records", async () => {
-  const rows = Array.from({ length: 70 }, (_, index) => record(index + 1));
-  const partial = await sample(rows, { unavailablePage: 2 });
-  assert.equal(partial.partial, true);
-  assert.equal(partial.groups.swap.summary.sampleSize, 25);
-  const cold = await sample(rows);
-  const extra = Array.from({ length: 50 }, (_, index) => record(index + 71));
-  const warm = await sample([...rows, ...extra], { previous: cold.records });
-  assert.deepEqual(warm.pages, [1, 2, 3]);
-  assert.equal(warm.groups.swap.summary.sampleSize, 60);
-  const offline = await sample(rows, { previous: cold.records, unavailablePage: 1, asOf: now + 30 * day });
-  assert.equal(offline.partial, true);
-  assert.equal(offline.groups.swap.summary.sampleSize, 0);
-});
-
-test("profile priority spans pages and progress preserves the sample while a 429 defers work", async () => {
+test("snapshot pricing prefers positive Value, falls back to RAP, counts copies and requires both baskets", async () => {
   const rows = [
-    ...Array.from({ length: 50 }, (_, index) => record(index + 1, { group: 0, other: "104" })),
-    ...Array.from({ length: 60 }, (_, index) => record(index + 51, { group: 0, other: "102" })),
-    record(111, { group: 1, other: "102" }),
+    record(1),
+    record(2, { sideB: [item("103", 0, 60, 2)] }),
+    record(3, { sideB: [item("104", null, 0)] }),
+    record(4, { sideB: [item("105", 350, 10)] }),
   ];
-  const saved = await sample(rows, {
-    profileFailure: (id) => id === "104" ? {
-      profile: null, failure: { reason: "profile-http-error", httpStatus: 429 }, retryAt: now + 8000,
-    } : null,
+  rows[0].sample = { overpay: 999 };
+  const { groups, audit, pricingSource } = await sample(rows);
+  assert.equal(pricingSource, "routility-snapshots");
+  assert.equal(groups.swap.summary.marketRate.overpay.median, 10);
+  assert.equal(groups.swap.summary.marketRate.overpayPercent.median, 10);
+  assert.equal(groups.swap.summary.severeImbalances, 1);
+  assert.deepEqual(groups.swap.summary.valuationCoverage, {
+    eligibleTrades: 3, pricedTrades: 2, fractionPriced: 2 / 3, assignedValueOnly: 2, usesRap: 0,
   });
-  assert.deepEqual(saved.profiles, ["101", "102", "104"]);
-  assert.equal(saved.progress[0].swap.pendingTrades, 110);
-  assert.equal(saved.progress[0].downgrade.pendingTrades, 1);
-  assert.equal(saved.progress[2].swap.pricedTrades, 60);
-  assert.equal(saved.progress[2].downgrade.pricedTrades, 1);
-  assert.equal(saved.pricingRetryAt, now + 8000);
-  assert.equal(saved.retryReason, "deferred-provider-cooldown");
-  assert.equal(saved.groups.swap.summary.valuationCoverage.pendingTrades, 50);
-  const resumed = await sample(rows, { previous: saved.records, asOf: now + 8000 });
-  assert.equal(resumed.groups.swap.summary.sampleSize, 110);
-  assert.equal(resumed.groups.swap.summary.valuationCoverage.pendingTrades, 0);
-  assert.equal(resumed.pricingRetryAt, null);
+  assert.equal(groups.downgrade.summary.overpay.median, 20);
+  assert.equal(groups.downgrade.summary.overpayPercent.median, 20);
+  assert.equal(groups.downgrade.summary.valuationCoverage.usesRap, 1);
+  assert.deepEqual(audit[2].sample.pricingFailures, [{ assetId: "104", reason: "missing-reported-price" }]);
 });
 
-test("dated profile gaps are unavailable and never substituted with current prices", async () => {
-  const rows = [record(1, { group: 0 })];
-  const result = await sample(rows, {
-    readStoredProfile: async (id) => id === "102" && {
-      profile: { checkedAt: now, currentValue: 110, rap: [], history: {
-        changes: [{ time: now, after: 110 }],
-      } },
-    },
-  });
-  assert.deepEqual(result.profiles, []);
-  const { valuationCoverage } = result.groups.swap.summary;
-  assert.equal(valuationCoverage.pricedTrades, 0);
-  assert.equal(valuationCoverage.pendingTrades, 0);
-  assert.equal(valuationCoverage.unavailableTrades, 1);
-  assert.equal(result.pricingRetryAt, null);
+test("stops at seven days, the end of history, or 500 raw records", async () => {
+  const rows = Array.from({ length: 60 }, (_, index) => record(index + 1));
+  for (let index = 55; index < rows.length; index++) rows[index] = record(index + 1, { at: now - 7 * day });
+  rows[1] = rows[0];
+  const recent = await sample(rows);
+  assert.deepEqual(recent.pages, [1, 2]);
+  assert.equal(recent.reason, "date");
+  assert.equal(recent.groups.swap.summary.sampleSize, 54);
+  assert.deepEqual(recent.exclusions, { "duplicate-trade": 1, "outside-window": 5 });
+  assert.equal((await sample(rows.slice(0, 40))).reason, "end");
+
+  const invalid = Array.from({ length: 550 }, (_, index) => ({ ...record(index + 1), trade: null }));
+  const capped = await sample(invalid);
+  assert.equal(capped.reason, "cap");
+  assert.equal(capped.pages.length, 10);
+  assert.equal(capped.audit.length, 500);
+  assert.deepEqual(capped.exclusions, { "invalid-source-record": 500 });
+});
+
+test("partial pages do not replace a complete cache and cached rows still age out", async () => {
+  const rows = Array.from({ length: 70 }, (_, index) => record(index + 1));
+  const full = await sample(rows);
+  const partial = await sample(rows, { previous: full.saved, unavailablePage: 2 });
+  assert.equal(partial.partial, true);
+  assert.equal(partial.groups.swap.summary.sampleSize, 50);
+  assert.equal(partial.saved, undefined);
+
+  const previous = { records: [record(1), record(2, { at: now - 7 * day + 1000 })] };
+  previous.records[0].sample = { overpay: 999 };
+  const fallback = await sample(rows, { previous, asOf: now + 1000, unavailablePage: 1 });
+  assert.equal(fallback.cachedFallback, true);
+  assert.equal(fallback.groups.swap.summary.sampleSize, 1);
+  assert.equal(fallback.groups.swap.summary.overpay.median, 10);
+  assert.equal(fallback.exclusions["outside-window"], 1);
+  assert.equal(fallback.historyFailure.httpStatus, 503);
+  assert.equal((await sample(rows, { unavailablePage: 1 })).status, "unavailable");
+});
+
+test("Marketplace deduplicates requests, reuses saved samples after a worker restart and refreshes after two minutes", async () => {
+  const scripts = await Promise.all([
+    "shared/market_targets.js", "shared/trade-valuations.js", "shared/item-overpay.js", "shared/overpay-sampling.js",
+    "background/market.js",
+  ].map((file) => readFile(new URL(`../../extension/${file}`, import.meta.url), "utf8")));
+  const saved = {};
+  const urls = [];
+  let currentTime = now;
+  class WorkerDate extends Date {
+    static now() { return currentTime; }
+  }
+
+  function startWorker() {
+    let listener;
+    runInNewContext(scripts.join("\n"), {
+      Date: WorkerDate, AbortSignal, URL,
+      chrome: {
+        runtime: { id: "roxol", onMessage: { addListener: (handler) => { listener = handler; } } },
+        storage: { local: {
+          get: async (key) => ({ [key]: structuredClone(saved[key]) }),
+          set: async (entries) => Object.assign(saved, structuredClone(entries)),
+        } },
+      },
+      fetch: async (url) => {
+        urls.push(url);
+        const observation = (now - 60_000) / 1000;
+        return Response.json({ page: 1, pages: 1, total: 1, per_page: 50, trades: [{
+          kind: "trade", trade_id: "trade-1", ts: observation, ts_latest: observation,
+          side_a_items: [{ asset_id: 101, value_then: 100, rap: 50 }],
+          side_b_items: [{ asset_id: 102, value_then: null, rap: urls.length === 1 ? 110 : 120 }],
+        }] });
+      },
+    });
+    return () => new Promise((resolve) => {
+      assert.equal(listener({ type: "roxol:market-overpay", assetId: "101" },
+        { id: "roxol", frameId: 0, url: "https://www.roblox.com/catalog/101/Item" }, resolve), true);
+    });
+  }
+
+  const read = startWorker();
+  const first = await Promise.all([read(), read()]);
+  const median = (result) => result.groups.swap.summary.overpay.median;
+  assert.deepEqual(first.map(median), [10, 10]);
+  assert.equal(urls.length, 1);
+  currentTime += 119_999;
+  const restarted = startWorker();
+  assert.equal(median(await restarted()), 10);
+  assert.equal(urls.length, 1);
+  currentTime++;
+  assert.equal(median(await restarted()), 20);
+  assert.deepEqual(urls, Array(2).fill("https://routility.io/web/item-trades/101?kind=trade&range=all&limit=50&page=1"));
 });
