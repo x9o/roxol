@@ -165,7 +165,7 @@ const RoxolOverpay = (() => {
     const exclusions = element("dl", "roxol-stat-grid");
     const download = ui.button("Download sample audit");
     const note = element("p", "roxol-overpay-note",
-      "Get and Give use the same trades. Each shows how the other basket compares with the page item’s value. Roxol samples up to 500 records first observed in the past 7 days and uses RoUtility’s reported trade-time Value or RAP. OP percentage uses the page item as the baseline. The filter excludes trades where one basket was worth more than twice the other. OP covers items only.");
+      "Roxol samples up to 500 RoUtility records first observed in the past 7 days and prices both sides with current Rolimon’s Value or RAP. OP percentage uses the page item as the baseline. The filter excludes trades where one basket is worth more than twice the other. OP covers items only.");
     details.append(element("summary", "", "Estimate details"), statisticsBody, note, auditNote, exclusions, download);
     const options = { swap: ui.button("One-for-one"), downgrade: ui.button("One-for-many") };
     let selected;
@@ -216,6 +216,8 @@ const RoxolOverpay = (() => {
       const notices = [];
       if (data.cachedFallback) notices.push("RoUtility could not refresh. Showing saved trades.");
       else if (data.partial) notices.push("RoUtility returned only part of the sample.");
+      const pricingUnavailable = data.pricedAt == null;
+      if (pricingUnavailable) notices.push("Current Rolimon’s prices are unavailable.");
       const announcement = notices.join(" ");
       if (status.textContent !== announcement) status.textContent = announcement;
       status.hidden = !notices.length;
@@ -227,8 +229,9 @@ const RoxolOverpay = (() => {
         .map(([reason, count]) => stat(exclusionLabels[reason] ?? reason, ui.format(count))));
       exclusions.hidden = !excluded;
       select(selected ?? (data.groups.downgrade.history.length ? "downgrade" : "swap"), true);
-      if (data.partial && ++unavailableAttempts <= 3) schedule(21_000);
-      if (!data.partial) unavailableAttempts = 0;
+      if (data.partial || pricingUnavailable) {
+        if (++unavailableAttempts <= 3) schedule(21_000);
+      } else unavailableAttempts = 0;
     }
 
     void refresh();

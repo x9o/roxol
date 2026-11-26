@@ -117,7 +117,7 @@ const RoxolItemOverpay = (() => {
     const overpay = priced ? opposite - target : null;
     const robux = [trade.robux?.sideA, trade.robux?.sideB];
     const pricingFailures = priced ? [] : items.filter((item) => !(item[field]?.value > 0))
-      .map(({ assetId, historicalUnavailable }) => ({ assetId, reason: field === "snapshot" ? "missing-reported-price" :
+      .map(({ assetId, historicalUnavailable }) => ({ assetId, reason: field === "current" ? "missing-current-rolimons-price" :
         historicalUnavailable ?? "missing-historical-value" }));
     if (!priced && !pricingFailures.length) pricingFailures.push({ reason: "invalid-basket-total" });
     return {
@@ -139,17 +139,19 @@ const RoxolItemOverpay = (() => {
     return opposite.length === 1 && opposite[0].quantity === 1 ? "swap" : "downgrade";
   }
 
-  function snapshotSample(trade, side, time) {
-    const { itemOnlyOverpay, amount } = RoxolTradeValuations;
-    function withPrice(item) {
-      const value = amount(item.valueThen);
-      const rap = amount(item.rap);
-      const snapshot = value > 0 ? { value, method: "assigned-value" } : rap > 0 ? { value: rap, method: "rap" } : null;
-      return { ...item, snapshot };
-    }
+  function currentPrice(feed, assetId) {
+    const item = feed?.get(`asset:${assetId}`);
+    if (item?.value > 0) return { value: item.value, method: "assigned-value" };
+    if (item?.rap > 0) return { value: item.rap, method: "rap" };
+    return null;
+  }
+
+  function currentSample(trade, side, time, feed) {
+    const withPrice = (item) => ({ ...item, current: currentPrice(feed, item.assetId) });
     const sideA = trade.sideA.map(withPrice);
     const sideB = trade.sideB.map(withPrice);
-    return targetSample({ ...trade, sideA, sideB }, side, time, itemOnlyOverpay(sideA, sideB, "snapshot"), "snapshot");
+    const totals = RoxolTradeValuations.itemOnlyOverpay(sideA, sideB, "current");
+    return targetSample({ ...trade, sideA, sideB }, side, time, totals, "current");
   }
 
   function itemPreview(records, id, now) {
@@ -221,7 +223,7 @@ const RoxolItemOverpay = (() => {
     };
   }
 
-  return { assetCopies, percentile, itemOverpay, itemPreview, snapshotSample, isolatedSide,
+  return { assetCopies, percentile, itemOverpay, itemPreview, currentPrice, currentSample, isolatedSide,
     unusualComposition, tradeGroup, severelyImbalanced, recentDays };
 })();
 

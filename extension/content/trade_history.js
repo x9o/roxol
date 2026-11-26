@@ -6,13 +6,12 @@ const RoxolTradeHistory = (() => {
   });
 
   const itemName = (item) => item.name || (item.assetId ? `Asset ${item.assetId}` : "Unknown item");
-  const snapshot = (item) => item.valueThen > 0 ? item.valueThen : item.rap > 0 ? item.rap : null;
   const amount = (value) => value == null ? "—" : ui.format(value);
 
-  function basketTotal(items) {
+  function basketTotal(items, prices) {
     let total = 0;
     for (const item of items) {
-      const value = snapshot(item);
+      const value = prices[item.assetId]?.value;
       if (value == null || !item.quantity) return null;
       total += value * item.quantity;
       if (!Number.isSafeInteger(total)) return null;
@@ -20,7 +19,7 @@ const RoxolTradeHistory = (() => {
     return total || null;
   }
 
-  function basket(items, assetId, label, total) {
+  function basket(items, assetId, label, total, prices) {
     const side = element("div", "roxol-trade-basket");
     const heading = element("h3", "roxol-basket-heading");
     heading.append(element("span", "", label), element("strong", "roxol-number", amount(total)));
@@ -39,8 +38,9 @@ const RoxolTradeHistory = (() => {
         title.append(element("span", "", name));
       }
       if (item.quantity > 1) title.append(element("span", "roxol-history-note", ` ×${ui.format(item.quantity)}`));
-      const value = element("div", "roxol-basket-value roxol-number", amount(snapshot(item)));
-      value.append(element("small", "roxol-history-note", item.valueThen > 0 ? "Value" : item.rap > 0 ? "RAP" : "Unpriced"));
+      const price = prices[item.assetId];
+      const value = element("div", "roxol-basket-value roxol-number", amount(price?.value));
+      value.append(element("small", "roxol-history-note", price?.method === "assigned-value" ? "Value" : price ? "RAP" : "Unpriced"));
       row.append(thumb, title, value);
       list.append(row);
     }
@@ -73,7 +73,7 @@ const RoxolTradeHistory = (() => {
     return table;
   }
 
-  function tradeRecord(trade, assetId) {
+  function tradeRecord(trade, assetId, prices) {
     const article = element("article", "roxol-history-record");
     const caption = element("div", "roxol-history-caption");
     if (trade.lastObservedAt || trade.firstObservedAt) {
@@ -84,8 +84,8 @@ const RoxolTradeHistory = (() => {
     } else {
       caption.append(element("span", "", "Observation time unavailable"));
     }
-    const totalA = basketTotal(trade.sideA);
-    const totalB = basketTotal(trade.sideB);
+    const totalA = basketTotal(trade.sideA, prices);
+    const totalB = basketTotal(trade.sideB, prices);
     const op = totalA == null || totalB == null ? null : totalB - totalA;
     if (trade.inferred) caption.append(element("span", "", "Inferred"));
     if (op == null) caption.append(element("span", "", "Unpriced trade"));
@@ -93,12 +93,13 @@ const RoxolTradeHistory = (() => {
       caption.append(element("span", "", "Severe imbalance"));
     }
     const sides = element("div", "roxol-basket-pair");
-    sides.append(basket(trade.sideA, assetId, "Side A", totalA), basket(trade.sideB, assetId, "Side B", totalB));
+    sides.append(basket(trade.sideA, assetId, "Side A", totalA, prices), basket(trade.sideB, assetId, "Side B", totalB, prices));
     const comparison = element("dl", "roxol-stat-grid roxol-history-comparison");
     comparison.append(stat("OP (B − A)", figure(op)), stat("OP % of A", figure(op == null ? null : op / totalA, true)));
     const details = element("details", "roxol-disclosure roxol-history-details");
     const tables = element("div", "roxol-history-tables");
-    tables.append(valuationTable(trade.sideA, "Side A"), valuationTable(trade.sideB, "Side B"));
+    tables.append(valuationTable(trade.sideA, "Side A · RoUtility observations"),
+      valuationTable(trade.sideB, "Side B · RoUtility observations"));
     details.append(element("summary", "", "Valuation details"), tables);
     article.append(caption, sides, comparison, details);
     return article;
@@ -148,7 +149,7 @@ const RoxolTradeHistory = (() => {
     const actions = element("div", "roxol-history-actions");
     actions.append(source, exportButton);
     const note = element("p", "roxol-history-note",
-      "Totals use RoUtility’s reported Value per copy, or RAP when Value is unavailable or zero. OP compares Side B against Side A. Side payments are unknown.");
+      "Totals use current Rolimon’s Value per copy, or current Rolimon’s RAP when there’s no positive Value. OP compares Side B against Side A. Side payments are unknown.");
     const previous = ui.button("Previous");
     const next = ui.button("Next");
     const retry = ui.button("Try again");
@@ -185,7 +186,11 @@ const RoxolTradeHistory = (() => {
         exportButton.disabled = ![...visited.values()].some((entry) => entry.trades.length);
         status.textContent = !result.total ? "No tracked trades."
           : `Page ${ui.format(result.page)} of ${ui.format(result.pages)} · ${ui.format(result.total)} tracked`;
-        records.replaceChildren(...result.trades.map((trade) => tradeRecord(trade, assetId)));
+        if (result.pricingUnavailable && result.trades.length) {
+          status.textContent += " · Rolimon’s prices unavailable";
+          retry.hidden = false;
+        }
+        records.replaceChildren(...result.trades.map((trade) => tradeRecord(trade, assetId, result.prices)));
         void loadThumbnails(records, assetId);
         if (result.total && !result.trades.length) {
           records.append(element("p", "roxol-history-note", "No two-sided trade records on this page."));

@@ -49,7 +49,7 @@ node tools/overpay/overpay-sampling.test.mjs
 
 Open `itemOverpay.items[assetId]` in the valuation report. Each group's `recent` window covers the last 30 days and `allObserved` covers observations supplied in the input. Exported pages determine how much of each window is represented.
 
-The Marketplace widget and its sample audit cover the most recent seven days of first observations, up to 500 RoUtility records. **Get this item** and **Give this item** present the same filtered sample median from each side of the trade. The widget uses the price snapshots on those records and stores up to 12 complete samples locally for two-minute reuse across tabs and worker restarts. The audit’s `trades` array contains eligible records for the standalone historical resolver. The audit’s `groups` show the widget’s snapshot-based results. [Marketplace calculation and cache](../../README.md#item-overpay)
+The Marketplace widget and its sample audit cover the most recent seven days of first observations, up to 500 RoUtility records. **Get this item** and **Give this item** present the same filtered sample median from each side of the trade. Both baskets use positive assigned Value or positive RAP from the shared Rolimon’s item-details cache. Roxol stores up to 12 complete history samples locally for two-minute reuse across tabs and worker restarts. The audit’s `trades` array preserves eligible RoUtility records for the standalone historical resolver. Its `groups` show the current-price results, and `pricedAt` records when the bulk feed was fetched in Unix milliseconds. [Marketplace calculation and cache](../../README.md#item-overpay)
 
 The standalone valuation report works from the supplied export and uses the end of each observation interval for its recent window. Its `normalizationExclusions` and `excludedRecords` preserve duplicate and malformed inputs that could not be normalized into `trades`. The `profileFailures` map carries reason codes and observed HTTP statuses by asset ID. Individual resolved records include the severe-imbalance flag and historical valuation gaps by item row.
 
@@ -59,9 +59,11 @@ The standalone valuation report works from the supplied export and uses the end 
 - Standard market-rate confidence requires at least 30 retained trades, at least 80% pricing coverage, and no more than 10% of priced trades severely imbalanced. Fewer than 10 retained trades yields an insufficient-sample label. Other samples have low confidence. Unpriced-reason counts can overlap within a trade.
 - The calculations use item values for all samples. Robux coverage counts priced samples with unknown, proof-reported zero, and proof-reported nonzero Robux. The resolver carries over amounts only from copy-corroborated proofs and records the fee basis when documented. These amounts stay out of the item-only OP calculations.
 
-### Marketplace snapshot verification
+### Marketplace audit verification
 
-On November 26, 2026 a fresh headless Edge profile loaded the live Silver King of the Night Marketplace page and displayed the estimate in 8.2 seconds from navigation. RoUtility snapshots priced all 35 eligible trades in each group. The one-for-many group retained 26 trades after the imbalance filter and had a median OP of −5,250. The one-for-one group retained nine trades and displayed insufficient data. The live layout and trade-type switch were checked at 1,440 px and 375 px. Fixture tests check seven-day eligibility, Value and RAP fallback, quantities, missing prices, partial history, cache reuse after worker restart, and refresh after expiration.
+On November 26, 2026 the saved Silver King of the Night audit was replayed at its original cutoff using one live Rolimon’s item-details response. The replay kept all 150 records and the same 70 eligible trades. One-for-many priced 28 of 35, retained 22 after the imbalance filter, and had a filtered median OP of −4,607.5 (previously −5,250). One-for-one priced 34 of 35 and retained nine, which is below the headline minimum. Each eligible trade’s OP, percentage, and imbalance flag were checked against an independent basket calculation. Fixture tests also cover seven-day eligibility, quantities, missing prices, partial history, shared bulk requests, and repricing saved trades after a worker restart.
+
+Headless Edge also checked the live Marketplace panel and **View trades** at 1,440 px and 375 px. The live one-for-many estimate matched the replay, and the viewer showed current prices alongside the original RoUtility values under **Valuation details**.
 
 The Get and Give display was checked on the live Silver King of the Night listing for negative and insufficient results. A dark-theme fixture verified positive and even results, plus access to pricing coverage and trade counts in **Estimate details**. Both checks used 1,440 px and 375 px Edge viewports.
 
@@ -122,7 +124,7 @@ The live listings were checked with headless Edge at 1,440 px and 375 px. A sepa
 
 ## Discord proof collector
 
-The collector is a research tool for the completed-trade audit. The extension's Overpay section uses live RoUtility trade history and Rolimon's historical valuations.
+The collector is a research tool for the completed-trade audit. The extension's Overpay section uses live RoUtility trade history and current Rolimon's values.
 
 Use Node.js 22 or later and Microsoft Edge on Windows. Run these commands from the repository root.
 

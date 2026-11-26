@@ -342,15 +342,16 @@
   }
 
   async function fetchOverpay(assetId) {
+    const feed = readItemFeed();
     const { [overpayStorageKey]: entries = [] } = await chrome.storage.local.get(overpayStorageKey).catch(() => ({}));
     const previous = entries.find((entry) => entry.assetId === assetId);
     const now = Date.now();
     if (previous?.checkedAt + overpayTTL > now) {
-      return RoxolOverpaySampling.summarizeSample({ ...previous, now });
+      return RoxolOverpaySampling.summarizeSample({ ...previous, now, feed: await feed });
     }
 
     const { saved, ...result } = await RoxolOverpaySampling.sampleItem({
-      assetId, previous, now,
+      assetId, previous, now, feed,
       readPage: (page, limit) => fetchTradeHistory(assetId, page, limit),
     });
     if (saved) {
@@ -366,7 +367,8 @@
 
   function readOverpay(assetId) {
     return cached(overpayCache, assetId) || remember(overpayCache, assetId, fetchOverpay(assetId), 12,
-      (result) => result.partial ? failureTTL : Math.max(0, result.checkedAt + overpayTTL - Date.now()));
+      (result) => result.partial || result.pricedAt == null ? failureTTL :
+        Math.max(0, Math.min(result.checkedAt + overpayTTL, result.pricedAt + itemTTL) - Date.now()));
   }
 
   async function eligibility(id) {
@@ -410,10 +412,14 @@
       const feed = await readItemFeed();
       return feed && !feed.get(keyOf(item))?.demand ? readDailySales(item) : { status: "unavailable" };
     },
-    "roxol:market-trade-history"(message, route) {
+    async "roxol:market-trade-history"(message, route) {
       if (route.page !== "detail" || route.kind !== "asset" || message.assetId !== route.id ||
           !amount(message.page)) return { status: "unavailable" };
-      return readTradeHistory(route.id, message.page);
+      const [history, feed] = await Promise.all([readTradeHistory(route.id, message.page), readItemFeed()]);
+      if (history.status !== "ok") return history;
+      const ids = new Set(history.trades.flatMap(({ sideA, sideB }) => [...sideA, ...sideB].map(({ assetId }) => assetId)));
+      const prices = Object.fromEntries([...ids].map((id) => [id, RoxolItemOverpay.currentPrice(feed, id)]));
+      return { ...history, prices, pricingUnavailable: !feed };
     },
     "roxol:market-thumbnails"(message, route) {
       if (route.page !== "detail" || route.kind !== "asset" || message.assetId !== route.id ||
