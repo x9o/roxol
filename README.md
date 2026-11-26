@@ -8,6 +8,7 @@ Roxol is a Chrome and Edge extension for Roblox limited items and trading. It us
 - **Sales history** with an interactive preview and a full viewer. See tracked sale dates, estimated prices, RAP before and after each sale, how often sales exceeded pre-sale RAP, and how the median prices for the last 10 and 30 tracked sales compare with assigned value and Best Price. The full viewer also includes Roblox's daily resale prices and volume where available.
 - **Profiles and inventories** with RAP and value totals for loaded copies, a paginated breakdown, serial numbers where available, and RoliBadges. Eligible profiles can show a **Trade Items** shortcut in narrow layouts.
 - **Trade comparisons** on selected trades and send and counter forms. Each offer shows its Rolimon's total below the native total, which is labeled `(RAP)`. The Rolimon's total uses the same item fallbacks and Robux amounts as the value comparison. Limited-item cards show Roblox RAP, Rolimon's value or a labeled RAP fallback, demand or average daily sales, state, and sales history where available. Centered badges between the offers show signed RAP and value changes, with Robux and Rolimon's icons and green and red indicators for gains and losses.
+- **Trade list previews** on Inbound, Outbound, Completed, and Closed or Inactive. Each row shows what you give above what you receive, with a Robux icon for RAP and a Rolimon's icon for value. Green and red edges show gains and losses for each metric. Hover over either pair for its label and the two totals.
 - **Overpay** on limited Marketplace asset pages. Compare raw trade statistics and filtered market-rate estimates for one-for-one and one-for-many RoUtility exchanges, with pricing coverage, confidence, and a downloadable sample audit.
 - **Item trade history** from RoUtility. Select **View trades** on a Roblox Marketplace asset page to compare item baskets, reported totals, and overpay side by side. Expand a record for its observation details, RAP, and Value. A local report resolves historical Rolimon's valuations and gives per-item swap, upgrade, and downgrade overpay statistics for exported trades.
 - **Reference links** to Rolimon's item, bundle, sales, and player pages. Trade offers and the inventory picker show an external link beside each item's Rolimon's value.
@@ -15,7 +16,7 @@ Roxol is a Chrome and Edge extension for Roblox limited items and trading. It us
 
 ## Planned features
 
-- **Expanded trade analysis** with trade-list win/loss previews, partner inventory value when available, and gross and net Robux after Roblox fees.
+- **Expanded trade analysis** with partner inventory value when available and gross and net Robux after Roblox fees.
 - **Trade navigation and search** with a **Send** shortcut beside **Counter**, links to Rolimon's item and player pages, and copy-specific ownership history when available. Search both inventories by item name or acronym, filter by demand, hold status, or serial where supported, and select the exact copy.
 - **Pending-trade inventory checks** for both sides, with per-copy ownership and tradability status, a timestamp, and a **Check again** action.
 - **Desktop trade alerts and settings** with separate opt-ins for inbound, declined, and completed trades, click-through to the relevant trade, a test notification, feature toggles, and an option to hide RAP deltas.
@@ -34,6 +35,10 @@ Enable Developer mode at `chrome://extensions` or `edge://extensions`, then sele
 The limited-card **Copy ID** control is disabled while its implementation is kept for future work.
 
 Roxol reuses item and resale helpers from Nevos. [Nevos source license](extension/vendor/nevos/LICENSE)
+
+## Trade list previews
+
+Open Roblox **Trades** while signed in and switch among Inbound, Outbound, Completed, and Closed or Inactive. Compare a row with its selected trade and check that the upper figures are your offer and the lower figures are what you receive. The previews use the trade's Roblox RAP when available and the current item snapshot as a fallback. The value pair uses Rolimon's assigned values or Roxol's usual item fallbacks. Both pairs include any Robux you give and count incoming Robux after the trade fee. A dash marks an unavailable total. Check that switching rows or tabs keeps the figures attached to the right trade. [Edge CDP verification workflow](AGENTS.md)
 
 ## Resale activity badges
 

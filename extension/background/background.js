@@ -39,15 +39,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
+let tradeAccountRequest;
+
 async function readTrade(id) {
-  const [account, trade] = await Promise.all([
-    fetchPrivateJson(AUTHENTICATED_USER_URL),
+  tradeAccountRequest ??= fetchPrivateJson(AUTHENTICATED_USER_URL)
+    .then(async (response) => response.ok ? RoxolTargets.idOf((await response.json())?.id) : null)
+    .finally(() => { tradeAccountRequest = null; });
+  const [selfId, trade] = await Promise.all([
+    tradeAccountRequest,
     fetchPrivateJson(`https://trades.roblox.com/v2/trades/${id}`),
   ]);
-  if (!account.ok || !trade.ok) return null;
-  const [user, detail] = await Promise.all([account.json(), trade.json()]);
-  if (detail.id != null && RoxolTargets.idOf(detail.id) !== id) return null;
-  return RoxolTrades.tradeOf(detail, RoxolTargets.idOf(user.id));
+  if (!selfId || !trade.ok) return null;
+  const detail = await trade.json();
+  if (detail?.id != null && RoxolTargets.idOf(detail.id) !== id) return null;
+  return RoxolTrades.tradeOf(detail, selfId);
 }
 
 chrome.runtime.onMessage.addListener((message, sender, reply) => {

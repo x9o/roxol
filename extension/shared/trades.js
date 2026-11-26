@@ -2,7 +2,8 @@ const ROBLOX_TRADES_URL = "https://www.roblox.com/trades";
 
 const RoxolTrades = (() => {
   const { idOf, targetOf, amount, copyIdOf } = RoxolTargets;
-  const selectedRow = ".trade-row-list .trade-row.selected";
+  const tradeRow = ".trade-row-list .trade-row";
+  const selectedRow = `${tradeRow}.selected`;
   const detailOffer = ".trade-list-detail-offer";
   const requestOffer = ".trade-request-window-offer";
   const detailCard = ".item-card-container, .trade-request-item:not(.blank-item):not(.draggable-border)";
@@ -45,5 +46,5 @@ const RoxolTrades = (() => {
       !card.parentElement.closest(selector) && !card.matches(".blank-item, .draggable-border"));
   }
 
-  return { selectedRow, detailOffer, requestOffer, detailCard, requestCard, pickerCard, itemOf, tradeOf, cardsIn };
+  return { tradeRow, selectedRow, detailOffer, requestOffer, detailCard, requestCard, pickerCard, itemOf, tradeOf, cardsIn };
 })();

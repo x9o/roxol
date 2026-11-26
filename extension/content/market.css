@@ -317,6 +317,52 @@
 .roxol-trade-chip-label { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
 .roxol-trade-chip-label .roxol-icon { width: 1em; height: 1em; margin: 0; }
 .roxol-trade-chip strong { color: inherit; font-weight: 700; }
+
+.trade-row-list .trade-row:has(> .roxol-trade-row-summary) {
+  height: auto;
+  flex-wrap: wrap;
+}
+
+.roxol-market.roxol-trade-row-summary {
+  clear: both;
+  display: flex;
+  flex-wrap: wrap;
+  align-self: flex-end;
+  justify-content: flex-end;
+  gap: 4px 6px;
+  inline-size: max-content;
+  max-inline-size: 100%;
+  margin-inline-start: auto;
+  color: inherit;
+  font-size: .8125rem;
+  line-height: 1.15;
+}
+
+.roxol-trade-row-pair {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 5px;
+  max-inline-size: 100%;
+  padding: 2px 6px;
+  border-inline-start: 3px solid var(--roxol-line);
+  border-radius: var(--roxol-radius);
+  background: var(--roxol-paper);
+  color: var(--roxol-ink);
+  text-align: end;
+  font-weight: 600;
+}
+
+.roxol-trade-row-summary .roxol-trade-row-pair[data-direction="up"] { border-color: var(--roxol-up); color: var(--roxol-ink); }
+.roxol-trade-row-summary .roxol-trade-row-pair[data-direction="down"] { border-color: var(--roxol-down); color: var(--roxol-ink); }
+.roxol-trade-row-pair .roxol-icon { grid-row: span 2; margin: 0; }
+.roxol-trade-row-pair .roxol-number { overflow-wrap: anywhere; }
+.roxol-trade-row-pair .roxol-number + .roxol-number {
+  margin-block-start: 2px;
+  padding-block-start: 2px;
+  border-block-start: 1px solid var(--roxol-line);
+}
+
 .roxol-market-symbol {
   display: inline-block;
   flex: none;

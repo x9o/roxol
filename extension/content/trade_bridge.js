@@ -2,7 +2,7 @@
   // The isolated world cannot read Roblox's Angular scopes or React props.
   // Return only row identities and normalized card fields, without mutating Roblox state.
   const { idOf } = RoxolTargets;
-  const { selectedRow, detailOffer, requestOffer, detailCard, requestCard, pickerCard, itemOf } = RoxolTrades;
+  const { tradeRow, detailOffer, requestOffer, detailCard, requestCard, pickerCard, itemOf } = RoxolTrades;
 
   function* reactProps(node, limit) {
     const key = Object.keys(node).find((name) => name.startsWith("__reactFiber$"));
@@ -68,7 +68,7 @@
     if (!(node instanceof Element)) return;
     let result;
     try {
-      if (node.matches(selectedRow)) result = rowId(node);
+      if (node.matches(tradeRow)) result = rowId(node);
       else if (node.matches(detailOffer)) result = offerTradeId(node);
       else if (node.matches(detailCard + ", " + requestCard + ", " + pickerCard) &&
         node.closest(`${detailOffer}, ${requestOffer}, .trade-inventory-panel`)) result = cardItem(node);

@@ -11,14 +11,18 @@
 
   const { idOf, amount, routeOf, keyOf, cardCopy, cardTarget } = RoxolTargets;
   if (routeOf(location.href)?.page !== "trades") return;
-  const { selectedRow, detailOffer, requestOffer, detailCard, requestCard, pickerCard, cardsIn } = RoxolTrades;
+  const { tradeRow, selectedRow, detailOffer, requestOffer, detailCard, requestCard, pickerCard, cardsIn } = RoxolTrades;
   const ui = RoxolMarketUI;
-  const nativeSelector = `${selectedRow}, ${detailOffer}, ${requestOffer}, .trade-inventory-panel`;
+  const nativeSelector = `.trade-row-list, ${detailOffer}, ${requestOffer}, .trade-inventory-panel`;
   const signed = new Intl.NumberFormat(undefined, { signDisplay: "exceptZero" });
   const percent = new Intl.NumberFormat(undefined, { style: "percent", signDisplay: "exceptZero", maximumFractionDigits: 1 });
   const itemRequests = new Map();
   const widgets = new Map();
   const offerTotals = new Map();
+  const tradeRequests = new Map();
+  const rowSummaries = new Map();
+  const summaryMetrics = [["RAP", "robux"], ["Value", "rolimons"]];
+  let pendingRows = 0;
   let selection;
   let priorDetail;
   let comparison;
@@ -103,11 +107,23 @@
     const request = { id: next.id, row: next.row, previous: priorDetail };
     selection = request;
     if (!request.id) return;
-    chrome.runtime.sendMessage({ type: "roxol:trade-detail", id: request.id }).then((data) => {
+    loadTrade(request.id).then((data) => {
       if (selection !== request) return;
       request.data = data;
       scan();
-    }).catch(() => {});
+    });
+  }
+
+  function loadTrade(id) {
+    const cached = tradeRequests.get(id);
+    if (cached && cached.expires > Date.now()) return cached.result;
+    const result = chrome.runtime.sendMessage({ type: "roxol:trade-detail", id }).catch(() => null);
+    const entry = { result, expires: Infinity };
+    tradeRequests.delete(id);
+    tradeRequests.set(id, entry);
+    if (tradeRequests.size > 100) tradeRequests.delete(tradeRequests.keys().next().value);
+    void result.then((data) => { entry.expires = Date.now() + (data ? 60_000 : 10_000); });
+    return result;
   }
 
   function loadMetadata(items) {
@@ -199,7 +215,7 @@
       const gross = selection.data[side].robux;
       const net = next.offers[side].net;
       // Native detail rows show post-tax Robux. Use the API gross on the give side.
-      const robux = side === 0 ? gross : net ?? (gross == null ? null : Math.round(gross * 0.7));
+      const robux = side === 0 ? gross : net ?? netRobux(gross);
       return { ...items, robux };
     });
   }
@@ -209,9 +225,13 @@
     return offers.map(({ cards, gross, hasInput, net }, side) => ({
       cards, prices: cards,
       robux: side === 1
-        ? (hasInput ? (gross == null ? null : Math.round(gross * 0.7)) : net === undefined ? 0 : net)
+        ? (hasInput ? netRobux(gross) : net === undefined ? 0 : net)
         : (hasInput ? gross : net === undefined || net === 0 ? 0 : null),
     }));
+  }
+
+  function netRobux(gross) {
+    return gross == null ? null : Math.round(gross * 0.7);
   }
 
   function total({ prices, robux }, metric) {
@@ -225,6 +245,73 @@
       sum += BigInt(figure);
     }
     return sum;
+  }
+
+  function rowOffers(data) {
+    return data.map(({ items, robux }, side) => ({
+      prices: items.map((item) => ({ ...item, rap: item.rap ?? metadata(item.target)?.data?.rap ?? null })),
+      robux: side === 0 ? robux : netRobux(robux),
+    }));
+  }
+
+  function renderRowSummary(row, state) {
+    if (!state.data?.every(({ items }) => Array.isArray(items))) return;
+    const offers = rowOffers(state.data);
+    const totals = summaryMetrics.map(([metric]) => offers.map((offer) => total(offer, metric)));
+    if (totals.every((pair) => pair.every((figure) => figure == null))) return;
+    const signature = totals.map((pair) => pair.join("|")).join("/");
+    if (state.signature !== signature) {
+      const summary = ui.element("span", "roxol-market roxol-trade-row-summary");
+      for (const [index, [metric, asset]] of summaryMetrics.entries()) {
+        const [give, receive] = totals[index];
+        const pair = ui.element("span", "roxol-trade-row-pair");
+        const label = metric === "Value" ? "Rolimon's value" : "RAP";
+        const direction = give == null || receive == null ? "unknown" : receive > give ? "up" : receive < give ? "down" : "flat";
+        pair.dataset.direction = direction;
+        pair.title = `${label}: Give ${ui.format(give)} · Receive ${ui.format(receive)}`;
+        pair.setAttribute("role", "img");
+        pair.setAttribute("aria-label", pair.title);
+        pair.append(ui.icon(asset));
+        for (const figure of [give, receive]) {
+          pair.append(ui.element("span", "roxol-number", figure == null ? "—" : ui.format(figure)));
+        }
+        summary.append(pair);
+      }
+      state.summary?.remove();
+      state.summary = summary;
+      state.signature = signature;
+    }
+    if (state.summary.parentElement !== row) row.append(state.summary);
+  }
+
+  function scanRows(next) {
+    const active = new Map();
+    if (tradesListPath.test(location.pathname) && !next.isForm) {
+      for (const row of document.querySelectorAll(tradeRow)) {
+        if (row.closest(".ng-hide, [hidden], [aria-hidden='true']") || !row.getClientRects().length) continue;
+        const id = row === next.row ? next.id : idOf(nativeData(row));
+        if (id) active.set(row, id);
+      }
+    }
+    for (const [row, state] of rowSummaries) {
+      if (active.get(row) === state.id) continue;
+      state.summary?.remove();
+      rowSummaries.delete(row);
+    }
+    for (const [row, id] of active) {
+      if (pendingRows >= 3) break;
+      if (rowSummaries.has(row)) continue;
+      const state = { id };
+      rowSummaries.set(row, state);
+      pendingRows++;
+      void loadTrade(id).then((data) => {
+        state.data = data;
+        pendingRows--;
+        scan();
+      });
+    }
+    loadMetadata([...rowSummaries.values()].flatMap(({ data }) => data?.flatMap(({ items }) => items ?? []) ?? []));
+    for (const [row, state] of rowSummaries) renderRowSummary(row, state);
   }
 
   function renderOfferTotals(offers, values) {
@@ -341,13 +428,16 @@
       comparison?.remove();
       comparison = null;
     }
+    scanRows(next);
   }
 
   function touchesTrade({ target, addedNodes, removedNodes }) {
     const node = target.nodeType === Node.TEXT_NODE ? target.parentElement : target;
     if (node?.closest(".roxol-market")) return false;
+    const children = [...addedNodes, ...removedNodes];
+    if (children.length && children.every((child) => child instanceof Element && child.matches(".roxol-market"))) return false;
     return node?.closest(".trade-row-list") || node?.closest(nativeSelector) ||
-      [...addedNodes, ...removedNodes].some((child) => child instanceof Element &&
+      children.some((child) => child instanceof Element &&
         !child.matches(".roxol-market") && (child.matches(nativeSelector) || child.querySelector(nativeSelector)));
   }
 
@@ -355,7 +445,7 @@
     if (changes.some(touchesTrade)) scan();
   }).observe(document.body, {
     subtree: true, childList: true, characterData: true, attributes: true,
-    attributeFilter: ["class", "hidden", "aria-hidden", "href", "value", "data-trade-id", "data-collectibleiteminstanceid",
+    attributeFilter: ["class", "hidden", "aria-hidden", "href", "value", "data-trade-id", "nrutradeid", "data-nte-trade-id", "data-collectibleiteminstanceid",
       "data-collectible-item-instance-id", "data-user-asset-id", "data-userassetid", "user-asset-id",
       "data-serial-number", "data-serialnumber",
       "data-asset-id", "data-bundle-id", "data-item-id", "data-item-type"],
