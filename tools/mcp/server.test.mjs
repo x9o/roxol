@@ -23,9 +23,11 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   };
   await writeFile(file, JSON.stringify({ pricedTrades: [{ ...entry, link: "https://example.com/private" }] }));
   await assert.rejects(loadProofs(file), /Invalid reviewed public proof/);
-  await writeFile(file, JSON.stringify({ pricedTrades: [entry, { id: "skip", status: "conflict" }] }));
+  await writeFile(file, JSON.stringify({ pricedTrades: [
+    { ...entry, date: "2026-11-20", robux: [10, null] }, entry, { id: "skip", status: "conflict" },
+  ] }));
   const proofs = await loadProofs(file);
-  assert.equal(proofs.records.length, 1);
+  assert.equal(proofs.records.length, 2);
   assert.equal("participants" in proofs.records[0], false);
 
   const originalFetch = globalThis.fetch;
@@ -63,6 +65,7 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
       if (nevosFailure === "empty") return Response.json({ item_id: assetId, count: 0, results: [] });
       return Response.json({ item_id: Number(assetId), count: 4, results: [
         { id: postId, content: "Trade screenshot", attachments: [attachment, "https://example.com/offsite"] },
+        { id: "1450000001000000000", timestamp: 1766000000000, content: "Older duplicate" },
         { id: "1450000001000000000", timestamp: 1767000000000, attachments: [] },
       ] });
     }
@@ -156,7 +159,10 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   assert.equal(live.total, 2);
   assert.equal(live.hasMore, true);
   assert.equal(live.records[0].postId, "1450000001000000000");
+  assert.equal(live.records[0].content, null);
   const older = await call("get_trade_proofs", { ...proofArgs, limit: 1, page: 2 });
+  assert.equal(older.hasMore, false);
+  assert.equal(older.records[0].postId, postId);
   assert.equal(older.records[0].content, "Trade screenshot");
   assert.deepEqual(older.records[0].attachments, ["https://nevos-extension.com/api/proofs/images/123456"]);
   const beforeInvalidLookups = urls.length;
@@ -177,11 +183,14 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
     assert.equal(fallback.evidenceType, "reviewed_screenshot");
     assert.equal(fallback.nevos.reason, reason);
     assert.equal(fallback.nevos.httpStatus, status);
+    assert.equal(fallback.total, 1);
     assert.deepEqual(fallback.records[0].robux, [0, null]);
     assert.equal(fallback.records[0].source, link);
   }
   const requestCount = urls.length;
-  assert.equal((await call("get_trade_proofs", proofArgs)).nevos.reason, "rate_limited");
+  const beyond = await call("get_trade_proofs", { ...proofArgs, page: 2, limit: 1 });
+  assert.equal(beyond.nevos.reason, "rate_limited");
+  assert.deepEqual(beyond.records, []);
   assert.equal(urls.length, requestCount);
   assert.equal((await client.callTool({ name: "get_item_stats", arguments: { id: "https://example.com" } })).isError, true);
   assert.equal((await originalFetch(endpoint, { method: "POST", headers: { Origin: "https://example.com" } })).status, 403);
@@ -225,7 +234,7 @@ test("Missing Nevos credentials skip live requests and preserve the reviewed fal
     throw new Error("Unexpected upstream request");
   });
   const item = { id: "439945661", kind: "asset" };
-  const record = { baskets: [[item], []] };
+  const record = { postId: "1450000000000000000", baskets: [[item], []] };
   const reviewed = { loadedAt: Date.now(), records: [record] };
   const result = await tradeProofs(reviewed, item, { page: 1, limit: 20 }, createProofClient({}));
   assert.equal(result.evidenceType, "reviewed_screenshot");

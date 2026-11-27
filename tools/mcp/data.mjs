@@ -157,11 +157,19 @@ export async function tradeObservations({ assetId, page }) {
   } : { page }) };
 }
 
+function pageOfProofs(records, page, limit) {
+  const unique = new Map();
+  for (const record of records) {
+    if (!unique.has(record.postId)) unique.set(record.postId, record);
+  }
+  return pageOf(Array.from(unique.values()), page, limit);
+}
+
 export async function tradeProofs(proofs, item, { page, limit }, readLiveProofs) {
   const nevos = await readLiveProofs(item);
   if (nevos.status === "ok") {
     return { item, ...observed(nevos.source, Date.now()), evidenceType: "nevos_proof_post",
-      providerCount: count(nevos.count), ...pageOf(nevos.records, page, limit) };
+      providerCount: count(nevos.count), ...pageOfProofs(nevos.records, page, limit) };
   }
 
   const source = "https://discord.com/channels/415246288779608064/535250426061258753";
@@ -169,5 +177,5 @@ export async function tradeProofs(proofs, item, { page, limit }, readLiveProofs)
   const records = proofs.records.filter(({ baskets }) =>
     baskets.some((basket) => basket.some(({ kind, id }) => item.kind === kind && item.id === id)));
   return { item, ...observed(source, proofs.loadedAt), evidenceType: "reviewed_screenshot", nevos,
-    ...pageOf(records, page, limit) };
+    ...pageOfProofs(records, page, limit) };
 }
