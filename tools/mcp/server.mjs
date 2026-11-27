@@ -4,10 +4,14 @@ import { pathToFileURL } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
-import { findItems, itemStats, history, tradeObservations, tradeProofs } from "./data.mjs";
+import { copyHistory, findItems, itemStats, history, tradeObservations, tradeProofs } from "./data.mjs";
+import targets from "../../extension/shared/market_targets.js";
 import { createProofClient, loadProofs } from "./proofs.mjs";
 
 const id = z.string().regex(/^[1-9]\d{0,19}$/).describe("Roblox ID as a decimal string");
+const collectibleInstanceId = z.string().trim().refine((value) => targets.copyIdOf(value) && !targets.idOf(value),
+  "Provide a collectible instance UUID.").transform((value) => value.toLowerCase())
+  .describe("Collectible item instance ID (CIIID) as a UUID");
 const kind = z.enum(["asset", "bundle"]);
 const target = { id, kind: kind.default("asset") };
 const query = z.string().trim().min(1).max(100);
@@ -39,6 +43,10 @@ function createMcp(proofs, readLiveProofs, instanceId) {
     ({ id, kind, ...args }) => history({ id, kind }, args));
   register("get_trade_observations", "Get a page of public RoUtility ownership-transfer observations. The feed can infer exchanges and cannot confirm completion or side payments.",
     z.strictObject({ assetId: id, page }), tradeObservations);
+  register("get_copy_history", "Get tracked ownership observations for one Roblox Limited copy by UAID or collectible instance UUID, newest first. Use as evidence for poisoning-risk assessment. Tracker coverage can have gaps and ownership history alone cannot establish theft or confirm a copy is safe.",
+    z.strictObject({ uaid: id.optional(), collectibleInstanceId: collectibleInstanceId.optional(), page, limit })
+      .refine(({ uaid, collectibleInstanceId }) => Boolean(uaid) !== Boolean(collectibleInstanceId),
+        "Provide either uaid or collectibleInstanceId."), copyHistory);
   register("get_trade_proofs", "Find live Nevos proof posts by item ID or by a name or acronym query such as SKOTN. Bundles and unavailable live results use the reviewed export.",
     z.strictObject({ id: id.optional(), query: query.optional(), kind: kind.optional(), page, limit })
       .refine(({ id, query }) => Boolean(id) !== Boolean(query), "Provide either id or query."),

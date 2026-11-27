@@ -11,6 +11,8 @@ import { createRoxolServer } from "./server.mjs";
 
 test("MCP discovers read-only tools and returns source data, cache hits, and proof coverage", async (t) => {
   const assetId = "439945661";
+  const uaid = "9007199254740993";
+  const collectibleInstanceId = "c90b0e8f-45ce-4cb9-9a4c-9f68cce9b3f9";
   const proofToken = "fixture-token";
   const networkRejection = "Proofs are not available from proxy or datacenter networks.";
   const postId = "1450000000000000000";
@@ -106,6 +108,24 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
         side_b_items: [{ asset_id: "9", rap: 12100, value_then: 0 }],
       }] });
     }
+    if (url.hostname === "routility.io") {
+      if (url.pathname === "/web/uaid/777") return new Response(null, { status: 404 });
+      if (url.pathname === "/web/uaid/888") return new Response(null, { status: 429 });
+      const copy = {
+        uaid, ciid: collectibleInstanceId, item_id: assetId, item_name: "Silver King of the Night", serial: 42,
+        current_owner: { ts_sec: 1763769600, player_id: null, player_name: null, is_hidden: true },
+        owners: [
+          { ts_sec: 1763683200, player_id: "9007199254740995", player_name: "EarlierOwner", _prev: true },
+          { ts_sec: 1763769600, player_id: null, player_name: null, avatar: "ignored" },
+          { ts_sec: 1763683200, player_id: "9876", player_name: "LaterOwner" },
+        ],
+        flips: [{ ignored: true }],
+      };
+      if (url.pathname === `/web/uaid/${uaid}` || url.pathname === `/web/ciiid/${collectibleInstanceId}`) {
+        return Response.json(copy);
+      }
+      if (url.pathname === "/web/uaid/999") return Response.json(copy);
+    }
     throw new Error(`Unexpected fixture URL ${url.href}`);
   });
 
@@ -117,7 +137,7 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   await client.connect(new StreamableHTTPClientTransport(endpoint));
   t.after(() => client.close());
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 5);
+  assert.equal(tools.length, 6);
   assert(tools.every(({ annotations }) => annotations.readOnlyHint === true && annotations.destructiveHint === false));
   const call = async (name, args) => {
     const result = await client.callTool({ name, arguments: args });
@@ -155,6 +175,39 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   assert.equal(trades.trades[0].sideA[0].valueThen, null);
   assert.equal(trades.trades[0].sideB[0].valueThen, 0);
   assert.equal("user_a_id" in trades.trades[0], false);
+
+  const [copyByUaid, copyByInstance] = await Promise.all([
+    call("get_copy_history", { uaid, limit: 1 }),
+    call("get_copy_history", { collectibleInstanceId: collectibleInstanceId.toUpperCase() }),
+  ]);
+  assert.deepEqual(copyByUaid.copy, {
+    uaid, collectibleInstanceId, assetId, name: "Silver King of the Night", serial: "42",
+  });
+  assert.deepEqual(copyByInstance.copy, copyByUaid.copy);
+  assert.equal(copyByUaid.source, `https://routility.io/web/uaid/${uaid}`);
+  assert.equal(copyByInstance.source, `https://routility.io/web/ciiid/${collectibleInstanceId}`);
+  assert.equal(copyByUaid.total, 3);
+  assert.equal(copyByUaid.hasMore, true);
+  assert.deepEqual(copyByUaid.records, [{ at: "2025-11-22T00:00:00.000Z", hidden: true }]);
+  assert.deepEqual(copyByUaid.currentOwner, copyByUaid.records[0]);
+  const nextCopyPage = await call("get_copy_history", { uaid, page: 2, limit: 1 });
+  assert.deepEqual(nextCopyPage.records, [{
+    at: "2025-11-21T00:00:00.000Z", ownerId: "9007199254740995", username: "EarlierOwner", previousOwner: true,
+  }]);
+  assert.equal(copyByInstance.hasMore, false);
+  assert.equal(copyByInstance.records.length, 3);
+  assert.equal(urls.filter((url) => url === copyByUaid.source).length, 1);
+  assert.equal((await call("get_copy_history", { uaid: "777" })).status, "not_found");
+  assert.equal((await call("get_copy_history", { uaid: "888" })).httpStatus, 429);
+  assert.equal((await call("get_copy_history", { uaid: "999" })).status, "unavailable");
+  const callsBeforeInvalid = urls.length;
+  for (const args of [{}, { uaid, collectibleInstanceId }, { collectibleInstanceId: uaid }, { uaid: 42 },
+    { uaid, limit: 51 }]) {
+    const result = await client.callTool({ name: "get_copy_history", arguments: args });
+    assert.equal(result.isError, true);
+  }
+  assert.equal(urls.length, callsBeforeInvalid);
+
   const proofArgs = { id: assetId };
   const live = await call("get_trade_proofs", { query: " SKOTN ", limit: 1 });
   assert.match(live.instanceId, /^[0-9a-f-]{36}$/);

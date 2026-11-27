@@ -4,12 +4,13 @@ import valuation from "../../extension/shared/trade-valuations.js";
 import vendor from "../../extension/vendor/nevos/rolimons_item_details.js";
 
 const { request, cached, remember, itemTTL } = market;
-const { keyOf, idOf, rolimonsSalesUrl } = targets;
+const { keyOf, idOf, copyIdOf, rolimonsSalesUrl } = targets;
 const rolimonsFeed = vendor.RolimonsItemDetails.ROLIMONS_ITEM_DETAILS_URL;
 const utilityFeed = "https://routility.io/api/public/items";
 const catalog = "https://catalog.roblox.com/v1/catalog/items/details";
 const utilityCache = new Map();
 const changeCache = new Map();
+const copyHistoryCache = new Map();
 
 const unavailable = (source, httpStatus) => ({ status: "unavailable", source, httpStatus });
 const observed = (source, checkedAt) => ({ status: "ok", source, checkedAt: new Date(checkedAt).toISOString() });
@@ -155,6 +156,58 @@ export async function tradeObservations({ assetId, page }) {
     evidenceType: "ownership_transfer_observation", pageSize: 20,
     hasMore: data.page < data.pages, returnedTrades: data.trades.length,
   } : { page }) };
+}
+
+function copyOwner(row) {
+  const seconds = row?.ts_sec;
+  if (!Number.isSafeInteger(seconds) || seconds <= 0 || seconds > 8.64e12) return null;
+  const ownerId = idOf(row.player_id);
+  const username = label(row.player_name);
+  return {
+    at: new Date(seconds * 1000).toISOString(),
+    ...(ownerId ? { ownerId } : {}),
+    ...(username ? { username } : {}),
+    ...(row.is_hidden === true || (!ownerId && !username) ? { hidden: true } : {}),
+    ...(row._prev === true ? { previousOwner: true } : {}),
+  };
+}
+
+async function readCopyHistory(source, lookup) {
+  const { data, status } = await request(source);
+  if (status === 404) return { status: "not_found", source };
+
+  const uaid = idOf(data?.uaid);
+  const assetId = idOf(data?.item_id);
+  const instanceId = copyIdOf(data?.ciid);
+  const collectibleInstanceId = instanceId && !idOf(instanceId) ? instanceId : null;
+  if (!assetId || (lookup.uaid && uaid !== lookup.uaid) ||
+      (lookup.collectibleInstanceId && collectibleInstanceId !== lookup.collectibleInstanceId) ||
+      !Array.isArray(data?.owners)) return unavailable(source, status);
+
+  const records = data.owners.toSorted((a, b) => b?.ts_sec - a?.ts_sec).map(copyOwner);
+  const currentOwner = data.current_owner == null ? null : copyOwner(data.current_owner);
+  if (records.includes(null) || (data.current_owner != null && !currentOwner)) return unavailable(source, status);
+
+  return {
+    ...observed(source, Date.now()),
+    copy: {
+      ...(uaid ? { uaid } : {}),
+      ...(collectibleInstanceId ? { collectibleInstanceId } : {}),
+      assetId,
+      name: label(data.item_name),
+      serial: idOf(data.serial),
+    },
+    ...(currentOwner ? { currentOwner } : {}),
+    records,
+  };
+}
+
+export async function copyHistory({ uaid, collectibleInstanceId, page, limit }) {
+  const lookup = uaid ? { uaid } : { collectibleInstanceId };
+  const source = `https://routility.io/web/${uaid ? `uaid/${uaid}` : `ciiid/${collectibleInstanceId}`}`;
+  const { records, ...metadata } = await (cached(copyHistoryCache, source) || remember(copyHistoryCache, source,
+    readCopyHistory(source, lookup).catch(() => unavailable(source)), 120, 2 * 60_000));
+  return records ? { ...metadata, ...pageOf(records, page, limit) } : { ...metadata, copy: lookup };
 }
 
 function pageOfProofs(records, page, limit) {
