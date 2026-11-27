@@ -13,7 +13,7 @@ Roxol is a Chrome and Edge extension for Roblox limited items and trading. It us
 - **Item trade history** from RoUtility. Select **View trades** on a Roblox Marketplace asset page to compare item baskets, current Rolimon's totals, and overpay side by side. Expand a record for RoUtility's observation details, RAP, and Value. A local report resolves historical Rolimon's valuations and gives per-item swap, upgrade, and downgrade overpay statistics for exported trades.
 - **Reference links** to Rolimon's item, bundle, sales, and player pages. Trade offers and the inventory picker show an external link beside each item's Rolimon's value.
 - **Toolbar popup and settings** with Roblox sign-in status, Trades tab detection, an **Open Trades** shortcut, and preferences grouped by feature.
-- **Read-only market data MCP** for item lookup, statistics, market history, trade observations, and live Nevos proof lookups with a reviewed export as fallback. It runs as a separate Node process and shares the extension's public market fetchers and caches. [MCP setup and ChatGPT connection](tools/mcp/README.md)
+- **Read-only market data MCP** for item lookup, statistics, market history, trade observations, and live Nevos proof lookups by ID, name, or acronym. A reviewed export can supply proofs when live results are empty or unavailable. The MCP runs as a separate Node process and shares the extension's public market fetchers and caches. [MCP setup and ChatGPT connection](tools/mcp/README.md)
 
 ## Planned features
 

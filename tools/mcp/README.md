@@ -82,7 +82,7 @@ For a stable URL, use a named tunnel pointing at the same loopback address. For 
 | `get_item_stats` | Provider-specific snapshots with RAP, assigned Value, demand, trend, flags, supply where published, and Roblox Best Price. RoUtility's `usdEstimate` and `priceBasis` are provider estimates. |
 | `get_market_history` | Choose `rolimons_sales` for tracked sales with pre- and post-sale RAP, `rolimons_value_changes` for dated Value changes, or `roblox_resale` for daily prices, volume, and current Roblox resale RAP. |
 | `get_trade_observations` | One RoUtility page of 20 records, with both baskets, copy identifiers where published, observed timestamps, RAP, Value and the provider's `inferred` flag. These are ownership-transfer observations with unknown trade completion and side payments. |
-| `get_trade_proofs` | Live Nevos proof posts for assets, with reviewed screenshot evidence as a fallback. Bundle lookups use the reviewed export. |
+| `get_trade_proofs` | Live Nevos proof posts by ID, item name, or acronym, with reviewed screenshot evidence as a fallback. Bundle lookups use the reviewed export. |
 
 IDs are decimal strings. Item tools default to `asset` and also accept `bundle` where a provider supports it. History and proof pages start at 1, default to 20 records, and accept up to 50 per page. Roblox daily history covers up to 180 returned days. Rolimon's may report more tracked sales than its page includes. Live provider data can shift between page requests. Amounts are in Robux except for fields that explicitly name another currency. A JSON `null` marks an unreported field. Per-source statuses distinguish absent items and unsupported coverage from upstream failures.
 
@@ -90,9 +90,24 @@ The Node process and the extension run independent instances of the same public 
 
 ### Trade proofs
 
-At startup, Roxol reads `ROXOL_MCP_NEVOS_TOKEN` or uses the client token from the local `nevos-trading-extension/extension/background/background.js` checkout. The live lookup sends the asset ID in the path of Nevos's proof-search POST. The response includes the post ID, posting timestamp, text, and Nevos image references when available. `providerCount` reports Nevos's count, while `total` and `hasMore` describe pagination over the records Nevos actually returned. The posts contain user-reported evidence.
+Pass either `{"id":"439945661"}` or `{"query":"SKOTN"}` to `get_trade_proofs`. Text queries use the same ranked lookup as `find_items`. Provide `kind` to restrict a query to assets or bundles. The live lookup appends the resolved asset ID to the proof-search URL and sends a POST with an empty body and a 20-second timeout. The response includes the post ID, posting timestamp, text, and Nevos image references when available. `providerCount` reports Nevos's count, while `total` and `hasMore` describe pagination over the records Nevos returned. The posts contain user-reported evidence.
 
-Set `ROXOL_MCP_PUBLIC_PROOFS` to a JSON file with a `pricedTrades` array to serve reviewed proofs for bundles or when Nevos is unavailable. Roxol falls back on HTTP errors, timeouts, and invalid response bodies, including the `edge-cache` response. HTTP 429 triggers a cooldown using `Retry-After` or 60 seconds if the header is missing or invalid. The fallback includes the Nevos status. If no export is configured, it reports `unavailable`. A configured export with no matches returns an empty page.
+Roxol reads the proof request settings at startup. Unset or empty values use the built-in defaults. If you previously set `ROXOL_MCP_NEVOS_TOKEN`, move its value to `ROXOL_PROOFS_TOKEN`.
+
+| Environment variable | Request setting |
+| --- | --- |
+| `ROXOL_PROOFS_URL` | Base URL, default `https://nevos-extension.com/api/proofs/search` |
+| `ROXOL_PROOFS_TOKEN` | `X-Nte-Client` |
+| `ROXOL_PROOFS_ORIGIN` | `Origin` |
+| `ROXOL_PROOFS_USER_AGENT` | `User-Agent` |
+| `ROXOL_PROOFS_ACCEPT` | `Accept`, default `application/json` |
+| `ROXOL_PROOFS_CONTENT_TYPE` | `Content-Type`, default `application/json` |
+| `ROXOL_PROOFS_FROM_EXTENSION` | `From-Extension`, default `1` |
+| `ROXOL_PROOFS_SEC_FETCH_DEST` | `Sec-Fetch-Dest`, default `empty` |
+| `ROXOL_PROOFS_SEC_FETCH_MODE` | Fetch mode and `Sec-Fetch-Mode`, default `cors` |
+| `ROXOL_PROOFS_SEC_FETCH_SITE` | `Sec-Fetch-Site`, default `none` |
+
+Set `ROXOL_MCP_PUBLIC_PROOFS` to a JSON file with a `pricedTrades` array to serve reviewed proofs for bundles or when Nevos is unavailable. Roxol falls back on request failures, timeouts, empty results, and invalid response bodies, including the `edge-cache` response. HTTP 429 triggers a cooldown using `Retry-After` or 60 seconds if the header is missing or invalid. The fallback includes the Nevos status. If no export is configured, it reports `unavailable`. A configured export with no matches returns an empty page.
 
 Use selected entries from the existing [Roxol proof review export](../overpay/README.md#review-completed-proofs). The MCP loads the file at startup, skips conflicting entries, and returns dated baskets, reported Robux, and evidence references. Discord may require a session to open an evidence link. Restart the server after updating the export or client token.
 
@@ -103,7 +118,7 @@ npm test --prefix tools/mcp
 node --test tools/overpay/*.test.mjs
 ```
 
-The MCP integration test uses an actual HTTP client and server with fixture provider responses and a reviewed proof fixture. It verifies the Nevos POST, proof pagination, and reviewed fallback for an `edge-cache` response, HTTP 403, a timeout, and HTTP 429. The live Node request for SKOTN using the workspace Nevos token returned HTTP 200 with `source: "edge-cache"` and no proof records. A live MCP lookup by asset ID `439945661` reported `invalid_proof_response` and found no configured fallback export.
+The MCP integration test uses an actual HTTP client and server with fixture provider responses and a reviewed proof fixture. It verifies acronym resolution, the Nevos POST, proof pagination, and fallback for empty results, an `edge-cache` response, a network failure, HTTP 403, a timeout, and HTTP 429. A unit test checks request overrides. The initial live Node POST for asset ID `439945661` returned HTTP 200 with 12 SKOTN proof records. Later direct and MCP requests returned HTTP 403 with a provider error about proxy or datacenter networks.
 
 Live checks against Black Iron Antlers covered item search, Rolimon's assigned Value and sale records, two RoUtility trade pages, and Roblox collectible resale history. A live Super Super Happy Face lookup also returned Roblox bundle resale history. Rolimon's item-profile request returned HTTP 403 during the Black Iron Antlers run. The tool reported that daily sales field as unavailable while returning data from the other sources.
 

@@ -5,11 +5,11 @@ import path from "node:path";
 import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { loadNevosToken, loadProofs } from "./proofs.mjs";
+import { createProofClient, loadProofs } from "./proofs.mjs";
 import { createRoxolServer } from "./server.mjs";
 
 test("MCP discovers read-only tools and returns source data, cache hits, and proof coverage", async (t) => {
-  const assetId = "398674411";
+  const assetId = "439945661";
   const postId = "1450000000000000000";
   const link = `https://discord.com/channels/415246288779608064/535250426061258753/${postId}`;
   const file = path.join(await mkdtemp(path.join(tmpdir(), "roxol-mcp-")), "pilot.json");
@@ -19,10 +19,6 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
     baskets: [[{ kind: "asset", id: assetId, quantity: 2 }], [{ kind: "asset", id: "9", quantity: 1 }]],
     robux: [0, null], hashes: ["f".repeat(64)],
   };
-  await writeFile(file, 'const nte_api_client_token = "fixture-token";');
-  const nevosToken = await loadNevosToken(undefined, file);
-  assert.equal(nevosToken, "fixture-token");
-  assert.equal(await loadNevosToken("override", file), "override");
   await writeFile(file, JSON.stringify({ pricedTrades: [{ ...entry, link: "https://example.com/private" }] }));
   await assert.rejects(loadProofs(file), /Invalid reviewed public proof/);
   await writeFile(file, JSON.stringify({ pricedTrades: [entry, { id: "skip", status: "conflict" }] }));
@@ -42,16 +38,27 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
       assert.equal(url.search, "");
       assert.equal(init.method, "POST");
       assert.equal(init.body, undefined);
+      assert.equal(init.mode, "cors");
       assert.equal(init.redirect, "error");
+      assert.ok(init.signal instanceof AbortSignal);
       assert.deepEqual(init.headers, {
-        Accept: "application/json", "X-NTE-Client": "fixture-token",
-        "From-Extension": "1", "Content-Type": "application/json",
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "From-Extension": "1",
+        "X-Nte-Client": "nte-x7Km2Qp9Wv4s",
+        Origin: "chrome-extension://domfhhikblcjiionldboaapeigejijic",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "none",
       });
       const attachment = "https://nevos-extension.com/api/proofs/images/123456";
       if (nevosFailure === "timeout") throw new DOMException("Timed out", "TimeoutError");
+      if (nevosFailure === "network") throw new TypeError("Fetch failed");
       if (nevosFailure === "403") return new Response(null, { status: 403 });
       if (nevosFailure === "429") return new Response(null, { status: 429, headers: { "Retry-After": "120" } });
       if (nevosFailure === "decoy") return Response.json({ ok: true, source: "edge-cache" });
+      if (nevosFailure === "empty") return Response.json({ item_id: assetId, count: 0, results: [] });
       return Response.json({ item_id: Number(assetId), count: 4, results: [
         { id: postId, content: "Trade screenshot", attachments: [attachment, "https://example.com/offsite"] },
         { id: "1450000001000000000", timestamp: 1767000000000, attachments: [] },
@@ -59,13 +66,13 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
     }
     assert.equal(init.credentials, "omit");
     if (url.hostname === "api.rolimons.com") return Response.json({ success: true, assets: {
-      [assetId]: ["Black Iron Antlers", "BIA", 10000, 12000, 12000, 3, 2, -1, -1, -1],
+      [assetId]: ["Silver King of the Night", "SKOTN", 10000, 12000, 12000, 3, 2, -1, -1, -1],
     } });
     if (url.pathname === "/api/public/items") return Response.json({ items: [{
-      id: assetId, name: "Black Iron Antlers", rap: 10000, value: 0, copies: 220,
+      id: assetId, name: "Silver King of the Night", rap: 10000, value: 0, copies: 220,
     }] });
     if (url.pathname === "/v1/catalog/items/details") return Response.json({ data: [{
-      itemType: "Asset", id: assetId, name: "Black Iron Antlers", recentAveragePrice: 10001, isLimited: true,
+      itemType: "Asset", id: assetId, name: "Silver King of the Night", recentAveragePrice: 10001, isLimited: true,
     }] });
     if (url.pathname.endsWith("/details")) return Response.json({ CollectibleItemDetails: { CollectibleLowestResalePrice: 12200 } });
     if (url.pathname.startsWith("/item/")) return new Response(null, { status: 403 });
@@ -93,7 +100,7 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
     throw new Error(`Unexpected fixture URL ${url.href}`);
   });
 
-  const server = createRoxolServer({ proofs, nevosToken }).listen(0, "127.0.0.1");
+  const server = createRoxolServer({ proofs }).listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   const endpoint = new URL(`http://127.0.0.1:${server.address().port}/mcp`);
   t.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
@@ -111,7 +118,7 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   };
 
   const [search, stats] = await Promise.all([
-    call("find_items", { query: "BIA" }),
+    call("find_items", { query: "SKOTN" }),
     call("get_item_stats", { id: assetId }),
   ]);
   assert.equal(search.items[0].id, assetId);
@@ -140,7 +147,8 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   assert.equal(trades.trades[0].sideB[0].valueThen, 0);
   assert.equal("user_a_id" in trades.trades[0], false);
   const proofArgs = { id: assetId };
-  const live = await call("get_trade_proofs", { ...proofArgs, limit: 1 });
+  const live = await call("get_trade_proofs", { query: " SKOTN ", limit: 1 });
+  assert.deepEqual(live.item, { id: assetId, kind: "asset" });
   assert.equal(live.evidenceType, "nevos_proof_post");
   assert.equal(live.providerCount, 4);
   assert.equal(live.total, 2);
@@ -149,10 +157,17 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   const older = await call("get_trade_proofs", { ...proofArgs, limit: 1, page: 2 });
   assert.equal(older.records[0].content, "Trade screenshot");
   assert.deepEqual(older.records[0].attachments, ["https://nevos-extension.com/api/proofs/images/123456"]);
+  const beforeInvalidLookups = urls.length;
   assert.equal((await call("get_trade_proofs", { ...proofArgs, kind: "bundle" })).nevos.status, "unsupported");
+  assert.equal((await call("get_trade_proofs", { query: "missing item" })).status, "not_found");
+  for (const args of [{}, { ...proofArgs, query: "SKOTN" }]) {
+    assert.equal((await client.callTool({ name: "get_trade_proofs", arguments: args })).isError, true);
+  }
+  assert.equal(urls.length, beforeInvalidLookups);
 
   for (const [failure, reason, status] of [
-    ["decoy", "invalid_proof_response", 200], ["403", "http_error", 403],
+    ["decoy", "invalid_proof_response", 200], ["empty", "empty_proof_response", 200],
+    ["403", "http_error", 403], ["network", "request_failed", undefined],
     ["timeout", "timeout", undefined], ["429", "rate_limited", 429],
   ]) {
     nevosFailure = failure;
@@ -168,4 +183,37 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   assert.equal(urls.length, requestCount);
   assert.equal((await client.callTool({ name: "get_item_stats", arguments: { id: "https://example.com" } })).isError, true);
   assert.equal((await originalFetch(endpoint, { method: "POST", headers: { Origin: "https://example.com" } })).status, 403);
+});
+
+test("Nevos proof requests use configured URL and header overrides", async (t) => {
+  const readLiveProofs = createProofClient({
+    ROXOL_PROOFS_URL: "https://proofs.example/search/",
+    ROXOL_PROOFS_ACCEPT: "application/*",
+    ROXOL_PROOFS_CONTENT_TYPE: "application/json; charset=UTF-8",
+    ROXOL_PROOFS_FROM_EXTENSION: "fixture-extension",
+    ROXOL_PROOFS_TOKEN: "fixture-token",
+    ROXOL_PROOFS_ORIGIN: "https://extension.example",
+    ROXOL_PROOFS_USER_AGENT: "fixture-agent",
+    ROXOL_PROOFS_SEC_FETCH_DEST: "document",
+    ROXOL_PROOFS_SEC_FETCH_MODE: "same-origin",
+    ROXOL_PROOFS_SEC_FETCH_SITE: "same-site",
+  });
+  const fetch = t.mock.method(globalThis, "fetch", () => Response.json({ results: [] }));
+  const result = await readLiveProofs({ id: "439945661", kind: "asset" });
+  assert.equal(result.reason, "empty_proof_response");
+  assert.equal(fetch.mock.callCount(), 1);
+  const [url, init] = fetch.mock.calls[0].arguments;
+  assert.equal(url, "https://proofs.example/search/439945661");
+  assert.equal(init.mode, "same-origin");
+  assert.deepEqual(init.headers, {
+    Accept: "application/*",
+    "Content-Type": "application/json; charset=UTF-8",
+    "From-Extension": "fixture-extension",
+    "X-Nte-Client": "fixture-token",
+    Origin: "https://extension.example",
+    "User-Agent": "fixture-agent",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "same-origin",
+    "Sec-Fetch-Site": "same-site",
+  });
 });

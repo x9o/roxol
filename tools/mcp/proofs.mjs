@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
+import targets from "../../extension/shared/market_targets.js";
 
 const proofLink = /^https:\/\/discord\.com\/channels\/415246288779608064\/535250426061258753\/(\d{17,20})$/;
 const id = z.string().regex(/^[1-9]\d{0,19}$/);
@@ -21,15 +22,68 @@ const row = z.object({
   hashes: z.array(hash).min(1).max(20),
 });
 
-export async function loadNevosToken(token, source = new URL(
-  "../../nevos-trading-extension/extension/background/background.js", import.meta.url,
-)) {
-  if (token?.trim()) return token.trim();
-  const script = await readFile(source, "utf8").catch((error) => {
-    if (error.code === "ENOENT") return "";
-    throw error;
-  });
-  return script.match(/\bconst nte_api_client_token\s*=\s*(["'])([^"'\r\n]+)\1/)?.[2];
+export function createProofClient(env = process.env) {
+  const baseUrl = (env.ROXOL_PROOFS_URL || "https://nevos-extension.com/api/proofs/search").replace(/\/+$/, "");
+  const mode = env.ROXOL_PROOFS_SEC_FETCH_MODE || "cors";
+  const headers = {
+    Accept: env.ROXOL_PROOFS_ACCEPT || "application/json",
+    "Content-Type": env.ROXOL_PROOFS_CONTENT_TYPE || "application/json",
+    "From-Extension": env.ROXOL_PROOFS_FROM_EXTENSION || "1",
+    "X-Nte-Client": env.ROXOL_PROOFS_TOKEN || "nte-x7Km2Qp9Wv4s",
+    Origin: env.ROXOL_PROOFS_ORIGIN || "chrome-extension://domfhhikblcjiionldboaapeigejijic",
+    "User-Agent": env.ROXOL_PROOFS_USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0",
+    "Sec-Fetch-Dest": env.ROXOL_PROOFS_SEC_FETCH_DEST || "empty",
+    "Sec-Fetch-Mode": mode,
+    "Sec-Fetch-Site": env.ROXOL_PROOFS_SEC_FETCH_SITE || "none",
+  };
+  let retryAt = 0;
+
+  return async function readLiveProofs(item) {
+    const source = `${baseUrl}/${item.id}`;
+    if (item.kind !== "asset") return { source, status: "unsupported" };
+    if (retryAt > Date.now()) return { source, status: "unavailable", httpStatus: 429, reason: "rate_limited" };
+
+    const signal = AbortSignal.timeout(20_000);
+    let httpStatus;
+    const unavailable = (reason) => ({ source, status: "unavailable", httpStatus, reason });
+    try {
+      // Node derives the outgoing Sec-Fetch-Mode from the fetch mode.
+      const response = await fetch(source, { method: "POST", headers, mode, redirect: "error", signal });
+      httpStatus = response.status;
+      if (httpStatus === 429) {
+        const retryAfter = response.headers.get("retry-after");
+        const now = Date.now();
+        const next = /^\d+$/.test(retryAfter ?? "") ? now + Number(retryAfter) * 1000 : Date.parse(retryAfter);
+        retryAt = Math.max(retryAt, Number.isFinite(next) ? next : now + 60_000);
+        return unavailable("rate_limited");
+      }
+      if (!response.ok) return unavailable("http_error");
+
+      const data = await response.json();
+      if (data?.source?.trim?.() === "edge-cache" || !Array.isArray(data?.results) ||
+          (data.item_id != null && data.item_id !== "" && targets.idOf(data.item_id) !== item.id)) {
+        return unavailable("invalid_proof_response");
+      }
+      if (!data.results.length) return unavailable("empty_proof_response");
+
+      const records = data.results.flatMap((row) => {
+        if (typeof row?.id !== "string" || !/^\d{17,20}$/.test(row.id)) return [];
+        const timestamp = Number(row.timestamp) || Number((BigInt(row.id) >> 22n) + 1420070400000n);
+        return [{
+          postId: row.id,
+          postedAt: timestamp > 0 && timestamp < 8.64e15 ? new Date(timestamp).toISOString() : null,
+          content: typeof row.content === "string" ? row.content : null,
+          attachments: Array.isArray(row.attachments) ? row.attachments.filter((url) =>
+            typeof url === "string" && /^https:\/\/nevos-extension\.com\/api\/proofs\/images\/\d{5,32}$/.test(url)) : [],
+        }];
+      }).sort((a, b) => (b.postedAt ?? "").localeCompare(a.postedAt ?? "") || b.postId.localeCompare(a.postId));
+      if (!records.length) return unavailable("invalid_proof_response");
+      return { source, status: "ok", records, count: data.count };
+    } catch (error) {
+      return unavailable(signal.aborted || error.name === "TimeoutError" ? "timeout" :
+        error instanceof SyntaxError ? "invalid_proof_response" : "request_failed");
+    }
+  };
 }
 
 export async function loadProofs(file) {
