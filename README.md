@@ -44,14 +44,14 @@ Sign in and open Roblox **Trades**. Roxol adds comparisons to the trade lists, t
 
 ## Connect Roxol MCP
 
-Roxol's Model Context Protocol (MCP) server gives ChatGPT live market lookups from Roblox, Rolimon's, RoUtility, and Nevos where configured. It runs separately from the browser extension and uses public data. For trade comparisons, give it both offers and any Robux on each side. A private Roblox trade ID alone is insufficient.
+Roxol's Model Context Protocol (MCP) server gives ChatGPT live market lookups from Roblox, Rolimon's, and RoUtility. With Nevos configured, it also retrieves trade proofs from the `value-requests` channel in Rolimon's Discord. It runs separately from the browser extension and uses public data. For trade comparisons, give it both offers and any Robux on each side. A private Roblox trade ID alone is insufficient.
 
 | What you can ask for | What Roxol can retrieve |
 | --- | --- |
 | “Look up Black Iron Antlers.” | Find a Limited by name, acronym, or ID and look up RAP, Value, demand, supply, and Best Price where available. |
 | “Show recent resale activity for this item.” | Rolimon's tracked sales and Value changes, plus Roblox daily resale prices and volume. |
 | “Compare these two offers.” | A trade summary with fee-adjusted RAP and Value differences, recent market activity, and related proof posts where available. |
-| “Show me trade proofs for SKOTN.” | Nevos posts with original captions and attachments. Roxol can return an original screenshot, and can optionally transcribe and index screenshots with server-side vision configured. |
+| “Show me trade proofs for SKOTN.” | Posts from the `value-requests` channel in Rolimon's Discord, with original captions and attachments. Roxol can return an original screenshot, and can optionally transcribe and index screenshots with server-side vision configured. |
 | “Check this copy's ownership history.” | RoUtility's tracked ownership changes for a UAID or collectible instance UUID. RoUtility also provides item-level transfer observations. |
 
 ### Get started on Windows
@@ -59,7 +59,7 @@ Roxol's Model Context Protocol (MCP) server gives ChatGPT live market lookups fr
 1. Install **Node.js 22 or later**. From the repository folder, run `npm.cmd ci --prefix tools/mcp`.
 2. Set up Cloudflare Quick Tunnel or ngrok and double-click **start-roxol.bat**. Leave the launcher running and copy the HTTPS URL ending in `/mcp`. A Cloudflare Quick Tunnel gets a new URL when restarted. [Windows launcher guide](tools/mcp/WINDOWS-LAUNCHER.md)
 3. In a ChatGPT workspace with custom MCP support, add a custom MCP server named **Roxol**, use the printed URL, and choose **No authentication**. [Connection settings](tools/mcp/README.md#4-connect-in-chatgpt)
-4. Select **@Roxol** in a chat and ask for the current stats for **Black Iron Antlers**. For live Nevos proofs, configure a Nevos client token on the server. [MCP setup and tool reference](tools/mcp/README.md) · [Nevos proof setup](tools/mcp/README.md#trade-proofs)
+4. Select **@Roxol** in a chat and ask for the current stats for **Black Iron Antlers**. To retrieve live trade proofs, configure a Nevos client token on the server. [MCP setup and tool reference](tools/mcp/README.md) · [Trade proof setup](tools/mcp/README.md#trade-proofs)
 
 ![Roxol in ChatGPT showing the Silver King of the Night market snapshot](docs/screenshots/mcp-item-snapshot.png)
 
@@ -80,7 +80,7 @@ The bundled **Roxol Trade Analysis** skill assesses a trade screenshot or writte
 
 ## Planned features
 
-- Marketplace overpay estimates based on Nevos trade proof data, plus expanded trade search, inventory checks, and alerts. [Trade feature plans](TRADE_UI_PLAN.md)
+- Marketplace overpay estimates based on trade proofs from Rolimon's Discord, plus expanded trade search, inventory checks, and alerts. [Trade feature plans](TRADE_UI_PLAN.md)
 
 ## Project links
 
