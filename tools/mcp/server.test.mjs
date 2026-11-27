@@ -5,11 +5,13 @@ import path from "node:path";
 import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { tradeProofs } from "./data.mjs";
 import { createProofClient, loadProofs } from "./proofs.mjs";
 import { createRoxolServer } from "./server.mjs";
 
 test("MCP discovers read-only tools and returns source data, cache hits, and proof coverage", async (t) => {
   const assetId = "439945661";
+  const proofToken = "fixture-token";
   const postId = "1450000000000000000";
   const link = `https://discord.com/channels/415246288779608064/535250426061258753/${postId}`;
   const file = path.join(await mkdtemp(path.join(tmpdir(), "roxol-mcp-")), "pilot.json");
@@ -45,7 +47,7 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
         Accept: "application/json",
         "Content-Type": "application/json",
         "From-Extension": "1",
-        "X-Nte-Client": "nte-x7Km2Qp9Wv4s",
+        "X-Nte-Client": proofToken,
         Origin: "chrome-extension://domfhhikblcjiionldboaapeigejijic",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0",
         "Sec-Fetch-Dest": "empty",
@@ -100,7 +102,7 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
     throw new Error(`Unexpected fixture URL ${url.href}`);
   });
 
-  const server = createRoxolServer({ proofs }).listen(0, "127.0.0.1");
+  const server = createRoxolServer({ proofs, proofEnv: { ROXOL_PROOFS_TOKEN: proofToken } }).listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   const endpoint = new URL(`http://127.0.0.1:${server.address().port}/mcp`);
   t.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
@@ -216,4 +218,18 @@ test("Nevos proof requests use configured URL and header overrides", async (t) =
     "Sec-Fetch-Mode": "same-origin",
     "Sec-Fetch-Site": "same-site",
   });
+});
+
+test("Missing Nevos credentials skip live requests and preserve the reviewed fallback", async (t) => {
+  const fetch = t.mock.method(globalThis, "fetch", () => {
+    throw new Error("Unexpected upstream request");
+  });
+  const item = { id: "439945661", kind: "asset" };
+  const record = { baskets: [[item], []] };
+  const reviewed = { loadedAt: Date.now(), records: [record] };
+  const result = await tradeProofs(reviewed, item, { page: 1, limit: 20 }, createProofClient({}));
+  assert.equal(result.evidenceType, "reviewed_screenshot");
+  assert.equal(result.nevos.reason, "no_nevos_client_token");
+  assert.deepEqual(result.records, [record]);
+  assert.equal(fetch.mock.callCount(), 0);
 });

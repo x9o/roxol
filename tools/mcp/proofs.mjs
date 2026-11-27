@@ -24,12 +24,13 @@ const row = z.object({
 
 export function createProofClient(env = process.env) {
   const baseUrl = (env.ROXOL_PROOFS_URL || "https://nevos-extension.com/api/proofs/search").replace(/\/+$/, "");
+  const token = env.ROXOL_PROOFS_TOKEN?.trim();
   const mode = env.ROXOL_PROOFS_SEC_FETCH_MODE || "cors";
   const headers = {
     Accept: env.ROXOL_PROOFS_ACCEPT || "application/json",
     "Content-Type": env.ROXOL_PROOFS_CONTENT_TYPE || "application/json",
     "From-Extension": env.ROXOL_PROOFS_FROM_EXTENSION || "1",
-    "X-Nte-Client": env.ROXOL_PROOFS_TOKEN || "nte-x7Km2Qp9Wv4s",
+    "X-Nte-Client": token,
     Origin: env.ROXOL_PROOFS_ORIGIN || "chrome-extension://domfhhikblcjiionldboaapeigejijic",
     "User-Agent": env.ROXOL_PROOFS_USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0",
     "Sec-Fetch-Dest": env.ROXOL_PROOFS_SEC_FETCH_DEST || "empty",
@@ -41,6 +42,7 @@ export function createProofClient(env = process.env) {
   return async function readLiveProofs(item) {
     const source = `${baseUrl}/${item.id}`;
     if (item.kind !== "asset") return { source, status: "unsupported" };
+    if (!token) return { source, status: "unavailable", reason: "no_nevos_client_token" };
     if (retryAt > Date.now()) return { source, status: "unavailable", httpStatus: 429, reason: "rate_limited" };
 
     const signal = AbortSignal.timeout(20_000);

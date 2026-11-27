@@ -53,8 +53,8 @@ function createMcp(proofs, readLiveProofs) {
   return server;
 }
 
-export function createRoxolServer({ proofs = null, publicHost } = {}) {
-  const readLiveProofs = createProofClient();
+export function createRoxolServer({ proofs = null, publicHost, proofEnv = process.env } = {}) {
+  const readLiveProofs = createProofClient(proofEnv);
   const allowedHosts = new Set(["127.0.0.1", "localhost", publicHost?.toLowerCase()].filter(Boolean));
   const allowedOrigins = new Set(["https://chatgpt.com", "https://chat.openai.com"]);
   if (publicHost) allowedOrigins.add(`https://${publicHost.toLowerCase()}`);

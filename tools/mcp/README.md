@@ -92,12 +92,19 @@ The Node process and the extension run independent instances of the same public 
 
 Pass either `{"id":"439945661"}` or `{"query":"SKOTN"}` to `get_trade_proofs`. Text queries use the same ranked lookup as `find_items`. Provide `kind` to restrict a query to assets or bundles. The live lookup appends the resolved asset ID to the proof-search URL and sends a POST with an empty body and a 20-second timeout. The response includes the post ID, posting timestamp, text, and Nevos image references when available. `providerCount` reports Nevos's count, while `total` and `hasMore` describe pagination over the records Nevos returned. The posts contain user-reported evidence.
 
-Roxol reads the proof request settings at startup. Unset or empty values use the built-in defaults. If you previously set `ROXOL_MCP_NEVOS_TOKEN`, move its value to `ROXOL_PROOFS_TOKEN`.
+Roxol reads the proof request settings at startup. Set `ROXOL_PROOFS_TOKEN` to a valid Nevos client token in the server's environment before starting it. In PowerShell, you can enter the token without echoing it or putting it in command history.
+
+```powershell
+$env:ROXOL_PROOFS_TOKEN = [System.Net.NetworkCredential]::new('', (Read-Host 'Nevos client token' -AsSecureString)).Password
+npm.cmd start --prefix tools/mcp
+```
+
+The endpoint and other headers have built-in defaults for unset or empty values. An unset or blank token makes Roxol use the reviewed export, when configured, and report `no_nevos_client_token` for the live source.
 
 | Environment variable | Request setting |
 | --- | --- |
 | `ROXOL_PROOFS_URL` | Base URL, default `https://nevos-extension.com/api/proofs/search` |
-| `ROXOL_PROOFS_TOKEN` | `X-Nte-Client` |
+| `ROXOL_PROOFS_TOKEN` | `X-Nte-Client`, required for live proofs |
 | `ROXOL_PROOFS_ORIGIN` | `Origin` |
 | `ROXOL_PROOFS_USER_AGENT` | `User-Agent` |
 | `ROXOL_PROOFS_ACCEPT` | `Accept`, default `application/json` |
@@ -118,7 +125,7 @@ npm test --prefix tools/mcp
 node --test tools/overpay/*.test.mjs
 ```
 
-The MCP integration test uses an actual HTTP client and server with fixture provider responses and a reviewed proof fixture. It verifies acronym resolution, the Nevos POST, proof pagination, and fallback for empty results, an `edge-cache` response, a network failure, HTTP 403, a timeout, and HTTP 429. A unit test checks request overrides. The initial live Node POST for asset ID `439945661` returned HTTP 200 with 12 SKOTN proof records. Later direct and MCP requests returned HTTP 403 with a provider error about proxy or datacenter networks.
+The MCP integration test uses an actual HTTP client and server with fixture provider responses and a reviewed proof fixture. It verifies acronym resolution, the Nevos POST, proof pagination, and fallback for empty results, an `edge-cache` response, a network failure, HTTP 403, a timeout, and HTTP 429. Unit tests check request overrides and fallback when the token is unset. The initial live Node POST for asset ID `439945661` returned HTTP 200 with 12 SKOTN proof records. Later direct and MCP requests returned HTTP 403 with a provider error about proxy or datacenter networks.
 
 Live checks against Black Iron Antlers covered item search, Rolimon's assigned Value and sale records, two RoUtility trade pages, and Roblox collectible resale history. A live Super Super Happy Face lookup also returned Roblox bundle resale history. Rolimon's item-profile request returned HTTP 403 during the Black Iron Antlers run. The tool reported that daily sales field as unavailable while returning data from the other sources.
 
