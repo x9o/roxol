@@ -60,16 +60,13 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
     async ({ id: itemId, query, kind, ...args }) => {
       const numericId = itemId ?? id.safeParse(query).data;
       let item = { id: numericId, kind: kind ?? "asset" };
-      if (numericId && !kind && proofOptions.screenshots?.byItem.has(`bundle:${numericId}`) &&
-          !proofOptions.screenshots.byItem.has(`asset:${numericId}`)) {
-        item.kind = "bundle";
-      }
       if (!numericId) {
         const search = await findItems({ query, kind, limit: 1 });
         [item] = search.items;
         if (!item) return { instanceId, query, status: search.status === "ok" ? "not_found" : search.status, sources: search.sources };
       }
-      return { instanceId, ...await tradeProofs(proofs, { id: item.id, kind: item.kind }, args, readLiveProofs, proofOptions) };
+      return { instanceId, ...await tradeProofs(proofs, { id: item.id, kind: item.kind },
+        { ...args, inferKind: Boolean(numericId && !kind) }, readLiveProofs, proofOptions) };
     }, { readOnly: false });
   return server;
 }

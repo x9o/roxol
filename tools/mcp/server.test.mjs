@@ -76,7 +76,7 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
     }
     if (url.hostname === "nevos-extension.com") {
       const proofItem = url.pathname.split("/").at(-1);
-      assert.ok([assetId, "9", "10", "44444"].includes(proofItem));
+      assert.ok([assetId, "9", "10", "44444", "12345"].includes(proofItem));
       assert.equal(url.search, "");
       assert.equal(init.method, "POST");
       assert.equal(init.body, undefined);
@@ -102,7 +102,7 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
       if (nevosFailure === "403") return Response.json({ error: proofToken }, { status: 403 });
       if (nevosFailure === "429") return new Response(null, { status: 429, headers: { "Retry-After": "120" } });
       if (nevosFailure === "decoy") return Response.json({ ok: true, source: "edge-cache" });
-      if (nevosFailure === "empty" || ["10", "44444"].includes(proofItem)) {
+      if (nevosFailure === "empty" || ["10", "44444", "12345"].includes(proofItem)) {
         return Response.json({ item_id: proofItem, count: 0, results: [] });
       }
       return Response.json({ item_id: Number(proofItem), count: 4, results: [
@@ -401,6 +401,64 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   assert.equal(reviewedContext.sources[reviewedContext.items["asset:9"].proofs.nevos].httpStatus, 429);
   assert.equal((await client.callTool({ name: "get_item_stats", arguments: { id: "https://example.com" } })).isError, true);
   assert.equal((await originalFetch(endpoint, { method: "POST", headers: { Origin: "https://example.com" } })).status, 403);
+});
+
+test("MCP retries an empty legacy face lookup with its mapped Nevos bundle ID", async (t) => {
+  const legacyId = "2409285794";
+  const bundleId = "105919952545574";
+  const postId = "1575118416581230723";
+  const content = "SKOTN,PV/YUM";
+  const attachments = ["https://nevos-extension.com/api/proofs/images/1575118416229175408"];
+  const lookups = [];
+  let legacyHasProof = false;
+  const originalFetch = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+    if (url.hostname === "127.0.0.1") return originalFetch(input, init);
+    if (url.hostname === "api.rolimons.com" && url.pathname === "/items/v1/faceassetbundlemap") {
+      return Response.json({ face_asset_bundle_map: { [legacyId]: bundleId } });
+    }
+    const id = url.pathname.split("/").at(-1);
+    assert.equal(url.origin, "https://nevos-extension.com");
+    assert.equal(url.pathname, `/api/proofs/search/${id}`);
+    assert.equal(init.method, "POST");
+    assert.ok([legacyId, bundleId].includes(id));
+    lookups.push(id);
+    const results = id === bundleId || legacyHasProof ? [{ id: postId, content, attachments }] : [];
+    return Response.json({ item_id: id, count: results.length, results });
+  });
+  const readAliases = createFaceAliases();
+  const readLiveProofs = createProofClient({ ROXOL_PROOFS_TOKEN: "fixture-token" });
+  const screenshots = await createScreenshotIndex({ env: {}, readImage: readLiveProofs.readImage, readAliases });
+  const server = createRoxolServer({ readAliases, readLiveProofs, screenshots }).listen(0, "127.0.0.1");
+  await new Promise((resolve) => server.once("listening", resolve));
+  t.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
+  const client = new Client({ name: "roxol-test", version: "1.0.0" });
+  await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${server.address().port}/mcp`)));
+  t.after(() => client.close());
+
+  for (const [lookup, kind, expectedRequests] of [
+    [{ id: legacyId }, "asset", [legacyId, bundleId]],
+    [{ query: bundleId }, "bundle", [legacyId, bundleId]],
+    [{ id: bundleId }, "bundle", [legacyId, bundleId]],
+    [{ id: legacyId, kind: "asset" }, "asset", [legacyId, bundleId]],
+    [{ query: legacyId }, "asset", [legacyId]],
+  ]) {
+    legacyHasProof = expectedRequests.length === 1;
+    lookups.length = 0;
+    const { structuredContent: result } = await client.callTool({
+      name: "get_trade_proofs", arguments: { ...lookup, readScreenshots: false },
+    });
+    assert.deepEqual(lookups, expectedRequests);
+    assert.equal(result.status, "ok");
+    assert.deepEqual(result.item, { id: lookup.id ?? lookup.query, kind });
+    assert.equal(result.source, `https://nevos-extension.com/api/proofs/search/${expectedRequests.at(-1)}`);
+    const [record] = result.records;
+    assert.equal(record.postId, postId);
+    assert.equal(record.content, content);
+    assert.deepEqual(record.attachments, attachments);
+    assert.equal(record.screenshots, undefined);
+  }
 });
 
 test("proof Robux uses separate screenshot item values and leaves unclear fee math unknown", () => {

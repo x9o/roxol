@@ -67,9 +67,9 @@ export function createProofClient(env = process.env) {
   };
   let retryAt = 0;
 
-  async function readLiveProofs(item) {
+  async function readLiveProofs(item, { allowBundle = false } = {}) {
     const source = `${baseUrl}/${item.id}`;
-    if (item.kind !== "asset") return { source, status: "unsupported" };
+    if (item.kind !== "asset" && !allowBundle) return { source, status: "unsupported" };
     if (!token) return { source, status: "unavailable", reason: "no_nevos_client_token" };
     if (retryAt > Date.now()) return { source, status: "unavailable", httpStatus: 429, reason: "rate_limited" };
 

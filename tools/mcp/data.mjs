@@ -224,11 +224,34 @@ function pageOfProofs(records, page, limit) {
   return pageOf(Array.from(unique.values()), page, limit);
 }
 
-export async function tradeProofs(proofs, item, { page, limit, readScreenshots, screenshotOffset = 0 }, readLiveProofs,
+export async function tradeProofs(proofs, item, { page, limit, readScreenshots, screenshotOffset = 0, inferKind }, readLiveProofs,
   { readAliases, screenshots } = {}) {
-  const aliases = readAliases && (item.kind === "bundle" || proofs?.records.length || screenshots?.byItem.size)
-    ? await readAliases() : null;
-  const equivalents = aliases?.get(keyOf(item)) ?? [];
+  const needsAliases = inferKind || item.kind === "bundle" || proofs?.records.length || screenshots?.byItem.size;
+  let aliases = needsAliases ? await readAliases?.() : null;
+  if (inferKind) {
+    const assetKey = keyOf(item);
+    const bundle = { id: item.id, kind: "bundle" };
+    const bundleKey = keyOf(bundle);
+    if (!aliases?.has(assetKey) && !screenshots?.byItem.has(assetKey) &&
+        (aliases?.has(bundleKey) || screenshots?.byItem.has(bundleKey))) {
+      item = bundle;
+    }
+  }
+  let equivalents = aliases?.get(keyOf(item)) ?? [];
+  const primary = item.kind === "bundle" && equivalents.length === 1 ? equivalents[0] : item;
+  let nevos = await readLiveProofs(primary);
+  if (nevos.status !== "ok") {
+    if (!needsAliases) {
+      aliases = await readAliases?.();
+      equivalents = aliases?.get(keyOf(item)) ?? [];
+    }
+    const bundle = item.kind === "bundle" && equivalents.length ? item :
+      equivalents.find(({ kind }) => kind === "bundle");
+    if (bundle) {
+      const fallback = await readLiveProofs(bundle, { allowBundle: true });
+      if (fallback.status === "ok") nevos = fallback;
+    }
+  }
   const keys = [item, ...equivalents].map(keyOf);
   const reviewed = keys.flatMap((key) => proofs?.byItem.get(key) ?? [])
     .sort((a, b) => b.completedAtReported.localeCompare(a.completedAtReported) || b.postId.localeCompare(a.postId));
@@ -236,7 +259,6 @@ export async function tradeProofs(proofs, item, { page, limit, readScreenshots, 
   for (const record of keys.flatMap((key) => screenshots?.byItem.get(key) ?? [])) {
     indexed.set(record.postId, { postId: record.postId, postedAt: record.postedAt });
   }
-  const nevos = await readLiveProofs(item.kind === "bundle" && equivalents.length === 1 ? equivalents[0] : item);
   const recentFirst = (a, b) => (b.postedAt ?? "").localeCompare(a.postedAt ?? "") || b.postId.localeCompare(a.postId);
 
   let result;
