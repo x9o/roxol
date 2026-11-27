@@ -2,26 +2,77 @@
 
 Roxol serves live public limited-item data through a stateless Streamable HTTP endpoint at `/mcp`. It runs in one Node.js process with in-memory caches. The tools return JSON with source URLs, observation timestamps where available, provider status, and pagination. ChatGPT supplies the analysis.
 
-## Run locally
+## Windows quick start
 
-Use Node.js 22 or later and run these commands from the repository root.
+You need Node.js 22 or newer, a local copy of Roxol, and access to **Add custom MCP server** in ChatGPT. This setup uses two PowerShell windows. Your PC must stay on, awake, and online while you use Roxol. You can lock the screen.
+
+### 1. Install once
+
+Open the Roxol folder and install the server dependencies. Adjust the path if you cloned Roxol elsewhere.
 
 ```powershell
-npm ci --prefix tools/mcp
-npm start --prefix tools/mcp
+Set-Location "$env:USERPROFILE\Desktop\roxol"
+node --version
+npm.cmd ci --prefix tools/mcp
 ```
 
-The default endpoint is `http://127.0.0.1:8787/mcp`. Set `PORT` to choose another port. Use the loopback binding for tunnels and reverse proxies on the same machine. A managed host can set `ROXOL_MCP_BIND=0.0.0.0` and `ROXOL_MCP_PUBLIC_HOST` to its external hostname, without a scheme or path.
+If PowerShell says `cloudflared` is unrecognized, download the portable x64 build into your user folder. If you already have `cloudflared` on your PATH, skip this download. [Cloudflare Windows downloads](https://developers.cloudflare.com/tunnel/downloads/)
 
-## Connect in ChatGPT
+```powershell
+$bin = Join-Path $env:LOCALAPPDATA 'Roxol\bin'
+New-Item -ItemType Directory -Force -Path $bin | Out-Null
+$cloudflared = Join-Path $bin 'cloudflared.exe'
+curl.exe --fail --location --output "$cloudflared" 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe'
+if ($LASTEXITCODE -eq 0) { & $cloudflared --version }
+```
 
-Use ChatGPT on the web and open **Plugins → Add → Add custom MCP server**. OpenAI documents read-only custom MCP access for Pro and eligible workspaces. A Plus account that already shows **Add custom MCP server** can attempt the connection there. Tool discovery after creation is the account-specific check. [OpenAI connection guide](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)
+### 2. Start the tunnel
 
-The simplest temporary setup is a local Node process and a Cloudflare Quick Tunnel. Start the tunnel in another terminal with `cloudflared tunnel --url http://127.0.0.1:8787`. It prints a temporary HTTPS URL. Set `$env:ROXOL_MCP_PUBLIC_HOST = '<hostname from the tunnel URL>'` in the Node terminal, then start or restart the server. Keep both processes running. For a stable URL, use a named Cloudflare Tunnel pointing at the same loopback address and set the same variable to its public hostname. [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) · [Named tunnel setup](https://developers.cloudflare.com/tunnel/get-started/)
+Run this in the first PowerShell window. It uses `cloudflared` from your PATH if available and otherwise looks for the portable copy from step 1.
 
-In the ChatGPT dialog, enter **Roxol**, choose **Server URL**, and paste the HTTPS URL with `/mcp` appended. Set **Authentication** to **No authentication**, create the plugin, and verify that five tools appear. Install the plugin, then select **@Roxol** in a chat. Anyone with access to the HTTPS endpoint can query the data it serves. [OpenAI connection settings](https://developers.openai.com/api/docs/guides/custom-mcp-server)
+```powershell
+$cloudflared = (Get-Command cloudflared.exe -ErrorAction SilentlyContinue).Source
+if (-not $cloudflared) {
+    $cloudflared = Join-Path $env:LOCALAPPDATA 'Roxol\bin\cloudflared.exe'
+}
+& $cloudflared tunnel --url http://127.0.0.1:8787 --protocol http2
+```
 
-Try asking “Use Roxol to look up Black Iron Antlers, get the latest public statistics, and fetch the first five assigned Value changes.”
+Copy the HTTPS URL ending in `.trycloudflare.com` and leave this window open. Anyone with that URL can query the public data Roxol serves. [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
+
+### 3. Start Roxol
+
+In the second PowerShell window, replace the example hostname with the one printed by the tunnel. Use just the hostname, without `https://` or `/mcp`.
+
+```powershell
+Set-Location "$env:USERPROFILE\Desktop\roxol"
+$env:PORT = '8787'
+$env:ROXOL_MCP_BIND = '127.0.0.1'
+$env:ROXOL_MCP_PUBLIC_HOST = 'your-tunnel.trycloudflare.com'
+npm.cmd start --prefix tools/mcp
+```
+
+Wait for `Roxol MCP listening at http://127.0.0.1:8787/mcp` and leave this window open. If you get `EADDRINUSE`, choose another port and use it in both the tunnel command and `$env:PORT`.
+
+### 4. Connect in ChatGPT
+
+Open **Plugins → Add → Add custom MCP server** in ChatGPT. [OpenAI connection settings](https://developers.openai.com/api/docs/guides/custom-mcp-server)
+
+| Field | Value |
+| --- | --- |
+| Name | Roxol |
+| Description | Look up Roblox limited item stats, resale history, and public trade observations from Rolimon's, RoUtility, and Roblox. |
+| Connection | **Server URL** |
+| Server URL | Your tunnel's HTTPS URL followed by `/mcp`, such as `https://your-tunnel.trycloudflare.com/mcp` |
+| Authentication | **No authentication** |
+
+Create and install the plugin. Check that ChatGPT lists five tools, then select **@Roxol** in a chat and ask for the current stats for Black Iron Antlers. If discovery fails, check that both PowerShell windows are running and that the plugin URL uses the current hostname and ends in `/mcp`.
+
+### Stop or restart
+
+Press **Ctrl+C** in each PowerShell window to stop Roxol and the tunnel. Next time, start at step 2. Each Quick Tunnel restart generates a new hostname. Use it when starting Roxol and update the server URL in ChatGPT.
+
+For a stable URL, use a named tunnel pointing at the same loopback address. For access while your PC is off, run Roxol on an always-on host. A managed host can set `ROXOL_MCP_BIND=0.0.0.0` and `ROXOL_MCP_PUBLIC_HOST` to its public hostname. [Named tunnel setup](https://developers.cloudflare.com/tunnel/get-started/)
 
 ## Tools
 
