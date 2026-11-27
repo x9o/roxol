@@ -65,14 +65,14 @@ Roxol's Model Context Protocol (MCP) server gives ChatGPT live market lookups fr
 
 ## Roxol Trade Analysis skill
 
-The bundled **Roxol Trade Analysis** skill uses the MCP connector to assess a trade screenshot or a written offer. It works from your perspective, compares RAP and Value after fees, and weighs demand, recent sales, and comparable exchanges. It explains a **Win**, **Fair**, or **Loss** verdict and its confidence, or leaves the verdict open when important details are missing.
+The bundled **Roxol Trade Analysis** skill assesses a trade screenshot or written offer from your perspective. It opens with a **Win**, **Fair**, or **Loss** verdict, its confidence, and the fee-adjusted overpay you pay or receive. It benchmarks that amount against recent same-direction trade proofs, with a linked table of the strongest comparisons and a count of independent deals. The analysis uses demand, recorded sale prices and frequency, Value changes, and projection flags to explain how each basket affects the call. When your screenshot shows both baskets, the analysis skips the item recap.
 
 1. Download the [Roxol Trade Analysis skill ZIP](skills/roxol-trade-analysis.zip).
 2. In a ChatGPT workspace with skill uploads enabled, open **Plugins → Skills → Add → Upload from your computer** and upload the ZIP.
 3. Make **@Roxol** available in the chat. Attach a trade screenshot or describe what you give, what you receive, and how much Robux is on each side. Include the date for a completed trade if you know it.
 4. Ask, “Was this trade a win, fair, or a loss?” [Skill source](skills/roxol-trade-analysis/SKILL.md)
 
-![Roxol Trade Analysis showing a Fair verdict for an 8-Bit Royal Crown downgrade, with confidence, fee-adjusted totals, and comparable trades](docs/screenshots/trade-analysis-verdict.png)
+![Earlier Roxol Trade Analysis example showing a Fair verdict for an 8-Bit Royal Crown downgrade](docs/screenshots/trade-analysis-verdict.png)
 
 ## Planned features
 

@@ -16,6 +16,7 @@
 | `get_item_stats` | The compact data leaves an important pricing, supply, or demand question, or provider-specific figures disagree. |
 | `get_market_history` | Use `rolimons_value_changes` for a dated benchmark, `rolimons_sales` for individual sales with RAP context when available, or `roblox_resale` for daily price and volume. A daily resale price is a separate series from historical RAP. |
 | `get_trade_proofs` | A comparable item's proof sample is truncated or too shallow, or a Nevos caption was truncated. Prefer a resolved ID and kind. |
+| `get_trade_proof_image` | Inspect the original screenshot when a candidate comp's caption leaves direction, fees or pricing ambiguous. Pass the attachment URL returned by `get_trade_proofs`. Use the image labels and amounts to establish what the record supports. |
 | `get_trade_observations` | Seek a relevant RoUtility ownership-transfer observation by asset ID, including corroboration when proof records are thin. Its inferred flag describes the provider's method. Even `inferred: false` leaves completion and side payments unconfirmed. |
 | `get_copy_history` | Check a specific copy by one UAID or one collectible instance UUID when a fuller timeline could resolve a material question. Verify the returned asset and copy identifiers. |
 

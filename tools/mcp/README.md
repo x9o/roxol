@@ -72,7 +72,7 @@ Create and install the plugin. Check that ChatGPT lists seven tools, then select
 
 ### Use the trade analysis skill
 
-In a ChatGPT workspace with skill uploads enabled, open **Plugins → Skills → Add → Upload from your computer** and choose the [Roxol Trade Analysis ZIP](../../skills/roxol-trade-analysis.zip). With the Roxol connector available in the chat, attach a Limiteds trade screenshot or describe what you give and receive. The [skill](../../skills/roxol-trade-analysis/SKILL.md) uses `get_trade_context` first and follows up when more evidence could affect the verdict. [Skills in ChatGPT](https://help.openai.com/en/articles/20001066-skills-in-chatgpt)
+In a ChatGPT workspace with skill uploads enabled, open **Plugins → Skills → Add → Upload from your computer** and choose the [Roxol Trade Analysis ZIP](../../skills/roxol-trade-analysis.zip). With the Roxol connector available in the chat, attach a Limiteds trade screenshot or describe what you give and receive. The skill starts with `get_trade_context` to calculate fee-adjusted overpay. It uses `get_trade_proofs` to expand the comparable sample when needed and `get_trade_proof_image` to resolve ambiguous proof terms. Market-history follow-ups support liquidity and downside analysis when the compact snapshot lacks enough context. [Skill source](../../skills/roxol-trade-analysis/SKILL.md) · [Skills in ChatGPT](https://help.openai.com/en/articles/20001066-skills-in-chatgpt)
 
 ### Stop or restart
 
