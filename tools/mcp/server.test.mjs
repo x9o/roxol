@@ -20,6 +20,7 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   const link = `https://discord.com/channels/415246288779608064/535250426061258753/${postId}`;
   const attachment = "https://nevos-extension.com/api/proofs/images/123456";
   const partialAttachment = "https://nevos-extension.com/api/proofs/images/123457";
+  const unavailableAttachment = "https://nevos-extension.com/api/proofs/images/123458";
   const indexDirectory = await mkdtemp(path.join(tmpdir(), "roxol-screenshot-index-"));
   t.after(async () => {
     await rm(path.join(indexDirectory, `${postId}-123456.json`), { force: true });
@@ -54,6 +55,7 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
       assert.equal(init.headers["X-Nte-Client"], proofToken);
       return new Response(Buffer.from("89504e470d0a1a0a", "hex"));
     }
+    if (url.href === unavailableAttachment) return Response.json({ ok: true });
     if (url.hostname === "api.openai.com") {
       visionRequests++;
       const request = JSON.parse(init.body);
@@ -184,9 +186,20 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   await client.connect(new StreamableHTTPClientTransport(endpoint));
   t.after(() => client.close());
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 7);
+  assert.equal(tools.length, 8);
   assert(tools.every(({ name, annotations }) => annotations.readOnlyHint === (name !== "get_trade_proofs") &&
     annotations.destructiveHint === false));
+  const viewProof = (attachment) => client.callTool({ name: "get_trade_proof_image", arguments: { attachment } });
+  const image = await viewProof(attachment);
+  assert.deepEqual(image.structuredContent, { attachment, status: "ok", mimeType: "image/png" });
+  assert.deepEqual(image.content, [{ type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" }]);
+  const unavailable = await viewProof(unavailableAttachment);
+  assert.equal(unavailable.structuredContent.status, "unavailable");
+  assert.equal(unavailable.content[0].type, "text");
+  const offsite = "https://example.com/api/proofs/images/123456";
+  assert.equal((await viewProof(offsite)).isError, true);
+  assert.equal(urls.includes(offsite), false);
+  assert.equal(visionRequests, 0);
   const call = async (name, args) => {
     const result = await client.callTool({ name, arguments: args });
     assert.equal(result.isError, undefined);

@@ -6,7 +6,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import { copyHistory, findItems, itemStats, history, tradeObservations, tradeProofs } from "./data.mjs";
 import targets from "../../extension/shared/market_targets.js";
-import { createFaceAliases, createProofClient, loadProofs } from "./proofs.mjs";
+import { createFaceAliases, createProofClient, loadProofs, proofImage } from "./proofs.mjs";
 import { createScreenshotIndex } from "./proof-screenshots.mjs";
 import { tradeContext, tradeContextInput } from "./trade-context.mjs";
 
@@ -25,7 +25,7 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
   const server = new McpServer({ name: "roxol-market-data", version: "1.0.0" }, {
     instructions: "Find item IDs with find_items. Source statuses and timestamps describe each provider independently. " +
       "RoUtility trades are ownership-transfer observations. Nevos proof posts are user-reported. " +
-      "Use get_trade_proofs with readScreenshots to transcribe and index both sides of proof attachments. Label proof W/L by its screenshot price field and leave any null fee-adjusted result unknown. " +
+      "Use get_trade_proof_image to view a Nevos attachment from get_trade_proofs. The optional readScreenshots flag transcribes and indexes both sides when server-side vision is configured. Label proof W/L by its screenshot price field and leave any null fee-adjusted result unknown. " +
       "Prices and history use Robux unless a field explicitly names another currency.",
   });
 
@@ -68,6 +68,22 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
       return { instanceId, ...await tradeProofs(proofs, { id: item.id, kind: item.kind },
         { ...args, inferKind: Boolean(numericId && !kind) }, readLiveProofs, proofOptions) };
     }, { readOnly: false });
+  server.registerTool("get_trade_proof_image", {
+    description: "View one original trade proof screenshot using a Nevos attachment URL returned by get_trade_proofs. Returns the picture as MCP image content.",
+    inputSchema: z.strictObject({ attachment: z.string().regex(proofImage)
+      .describe("Nevos attachment URL from get_trade_proofs.") }),
+    annotations,
+  }, async ({ attachment }) => {
+    const image = await readLiveProofs.readImage?.(attachment).catch(() => null);
+    if (!image) {
+      return { content: [{ type: "text", text: "Nevos did not return a readable image for this attachment." }],
+        structuredContent: { attachment, status: "unavailable" } };
+    }
+
+    const mimeType = `image/${image.mime}`;
+    return { content: [{ type: "image", data: image.bytes.toString("base64"), mimeType }],
+      structuredContent: { attachment, status: "ok", mimeType } };
+  });
   return server;
 }
 
