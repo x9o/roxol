@@ -161,6 +161,10 @@ const RoxolPublicMarket = (() => {
         collectibleId: uuidPattern.test(id || "") ? id : null,
         limited: limited || row.isLimited === true || row.isLimitedUnique === true,
         rap: amount(row.recentAveragePrice),
+        assetType: amount(row.assetType),
+        lowestAsk: amount(row.lowestResalePrice) || null,
+        hasResellers: typeof row.hasResellers === "boolean" ? row.hasResellers :
+          row.lowestResalePrice === 0 ? false : null,
         checkedAt: Date.now(),
       });
     }
@@ -173,7 +177,7 @@ const RoxolPublicMarket = (() => {
       const batch = catalogDetails(missing).catch(() => new Map());
       for (const item of missing) {
         const key = keyOf(item);
-        remember(detailsCache, key, batch.then((results) => results.get(key) || null), 600, itemTTL);
+        remember(detailsCache, key, batch.then((results) => results.get(key) || null), 5000, itemTTL);
       }
     }
     return Promise.all(targets.map((item) => cached(detailsCache, keyOf(item))));
@@ -197,6 +201,7 @@ const RoxolPublicMarket = (() => {
       httpStatus = result?.status;
     }
 
+    const usedLegacyFallback = !payload && uuidPattern.test(collectibleId || "");
     if (!payload && item.kind === "asset") {
       source = `https://economy.roblox.com/v1/assets/${item.id}/resale-data`;
       const result = await request(source);
@@ -205,17 +210,23 @@ const RoxolPublicMarket = (() => {
     }
     if (!payload || typeof payload !== "object") return { status: "unavailable", source, httpStatus };
 
-    const daily = salesCore.normalize_points(payload, { preserveMissingVolume: true })
+    const volumeByTime = salesCore.normalize_volume(payload);
+    const daily = salesCore.normalize_points(payload, { preserveMissingVolume: true, volumeByTime })
       .filter((point) => Number.isSafeInteger(point.value) && Math.abs(point.time_ms) <= 8.64e15)
       .slice(0, 180);
+    const hasVolume = Array.isArray(payload.volumeDataPoints) || Array.isArray(payload.resaleData?.volumeDataPoints);
+    const volumeDays = hasVolume ? [...volumeByTime]
+      .filter(([time]) => time > 0 && time <= 8.64e15)
+      .sort(([a], [b]) => b - a).slice(0, 180) : null;
     const rap = amount(payload.recentAveragePrice ?? payload.resaleData?.recentAveragePrice);
-    return { status: "ok", rap, daily, checkedAt: Date.now(), source };
+    return { status: "ok", rap, daily, volumeDays, checkedAt: Date.now(), source, usedLegacyFallback };
   }
 
   function readResale(item) {
     const key = keyOf(item);
     return cached(resaleCache, key) || remember(resaleCache, key,
-      readOneResale(item).catch(() => ({ status: "unavailable" })), 240, itemTTL);
+      readOneResale(item).catch(() => ({ status: "unavailable" })), 240,
+      (data) => data.usedLegacyFallback ? failureTTL : itemTTL);
   }
 
   function observedAt(seconds) {
@@ -287,7 +298,7 @@ const RoxolPublicMarket = (() => {
   }
 
   return {
-    request, cached, remember, itemTTL, failureTTL, readItemFeed, withItemMetadata,
+    request, cached, remember, itemTTL, failureTTL, catalogUrl, readItemFeed, withItemMetadata,
     readTrackedSales, readDailySales, readBestListing, readDetails, readResale, fetchTradeHistory, readTradeHistory,
   };
 })();

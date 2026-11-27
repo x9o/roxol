@@ -47,18 +47,7 @@
     );
   }
 
-  function normalize_points(payload, { preserveMissingVolume = false } = {}) {
-    if (!payload) return [];
-    let rows = [];
-    let push = (arr) => {
-      if (Array.isArray(arr)) for (let row of arr) rows.push(row);
-    };
-    push(payload.priceDataPoints);
-    push(payload.data);
-    push(payload?.resaleData?.priceDataPoints);
-    push(payload?.graphData?.dataPoints);
-    push(payload?.itemPriceData?.priceDataPoints);
-    // Roblox reports one price point per day plus a parallel per-day volume.
+  function normalize_volume(payload) {
     let volume_by_time = new Map();
     let push_volumes = (arr) => {
       if (!Array.isArray(arr)) return;
@@ -69,8 +58,22 @@
           volume_by_time.set(time, count);
       }
     };
-    push_volumes(payload.volumeDataPoints);
+    push_volumes(payload?.volumeDataPoints);
     push_volumes(payload?.resaleData?.volumeDataPoints);
+    return volume_by_time;
+  }
+
+  function normalize_points(payload, { preserveMissingVolume = false, volumeByTime = normalize_volume(payload) } = {}) {
+    if (!payload) return [];
+    let rows = [];
+    let push = (arr) => {
+      if (Array.isArray(arr)) for (let row of arr) rows.push(row);
+    };
+    push(payload.priceDataPoints);
+    push(payload.data);
+    push(payload?.resaleData?.priceDataPoints);
+    push(payload?.graphData?.dataPoints);
+    push(payload?.itemPriceData?.priceDataPoints);
     return rows
       .map((row) => {
         let time_ms = parse_time(
@@ -87,7 +90,7 @@
             10,
           ),
           time_ms,
-          volume: volume_by_time.get(time_ms) ?? (preserveMissingVolume ? null : 0),
+          volume: volumeByTime.get(time_ms) ?? (preserveMissingVolume ? null : 0),
         };
       })
       .filter(
@@ -188,6 +191,7 @@
     average,
     median,
     normalize_points,
+    normalize_volume,
     compute_summary,
   };
 })(typeof module !== "undefined" && module.exports ? module.exports : typeof globalThis !== "undefined" ? globalThis : this);

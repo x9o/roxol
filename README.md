@@ -53,6 +53,7 @@ Roxol's Model Context Protocol (MCP) server gives ChatGPT live market lookups fr
 | What you can ask for | What Roxol can retrieve |
 | --- | --- |
 | “Look up Black Iron Antlers.” | Find a Limited by name, acronym, or ID and look up RAP, Value, demand, supply, and Best Price where available. |
+| “Show the 10 most liquid Limiteds at 100k–250k Value with High or Amazing demand.” | Rank Limiteds by sales volume, price, Value or RAP change, or discount to Value. Compare each item's ranking metric with recent sales and the current lowest resale ask. |
 | “Show recent resale activity for this item.” | Rolimon's tracked sales and Value changes, plus Roblox daily resale prices and volume. |
 | “Compare these two offers.” | A trade summary with fee-adjusted RAP and Value differences, recent market activity, and related proof posts where available. |
 | “Show me trade proofs for SKOTN.” | Posts from the `value-requests` channel in Rolimon's Discord, with original captions and attachments. Roxol can return an original screenshot, and can optionally transcribe and index screenshots with server-side vision configured. |

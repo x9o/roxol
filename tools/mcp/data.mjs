@@ -5,7 +5,7 @@ import vendor from "../../extension/vendor/nevos/rolimons_item_details.js";
 
 const { request, cached, remember, itemTTL } = market;
 const { keyOf, idOf, copyIdOf, rolimonsSalesUrl } = targets;
-const rolimonsFeed = vendor.RolimonsItemDetails.ROLIMONS_ITEM_DETAILS_URL;
+export const rolimonsFeed = vendor.RolimonsItemDetails.ROLIMONS_ITEM_DETAILS_URL;
 const utilityFeed = "https://routility.io/api/public/items";
 const catalog = "https://catalog.roblox.com/v1/catalog/items/details";
 const utilityCache = new Map();
@@ -147,12 +147,15 @@ export async function history(item, { series, page, limit }) {
       })), page, limit),
     } : unavailable(source, data.httpStatus)) };
   }
-  const segment = item.kind === "bundle" ? "bundle-value-changes" : "item-value-changes";
-  const source = `https://www.rolimons.com/${segment}/${item.id}`;
-  const { changes, ...metadata } = await readChanges(item, source);
+  const { changes, ...metadata } = await readValueChanges(item);
   return { item, series, ...metadata, ...(changes ? pageOf(changes.toReversed().map(({ time, before, after }) => ({
     at: new Date(time).toISOString(), before, after,
   })), page, limit) : {}) };
+}
+
+export function readValueChanges(item) {
+  const segment = item.kind === "bundle" ? "bundle-value-changes" : "item-value-changes";
+  return readChanges(item, `https://www.rolimons.com/${segment}/${item.id}`);
 }
 
 export async function tradeObservations({ assetId, page }) {

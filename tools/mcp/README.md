@@ -85,6 +85,7 @@ For a stable URL, use a named tunnel pointing at the same loopback address. For 
 | Tool | Data |
 | --- | --- |
 | `find_items` | Find limiteds by ID, name, or acronym in the Rolimon's and RoUtility item feeds. Results include asset or bundle kind. |
+| `search_limiteds` | Filter and rank Rolimon's Limited assets and bundles by price, demand, trend, liquidity, historical change, or discount to Value. Returns the metric used for each rank and recent sale evidence. |
 | `get_item_stats` | Provider-specific snapshots with RAP, assigned Value, demand, trend, flags, supply where published, and Roblox Best Price. RoUtility's `usdEstimate` and `priceBasis` are provider estimates. |
 | `get_trade_context` | Whole-trade evidence with both baskets, RAP and Value totals, recent market activity, shared proof posts, and optional copy history. |
 | `get_market_history` | Choose `rolimons_sales` for tracked sales with pre- and post-sale RAP, `rolimons_value_changes` for dated Value changes, or `roblox_resale` for daily prices, volume, and current Roblox resale RAP. |
@@ -96,6 +97,25 @@ For a stable URL, use a named tunnel pointing at the same loopback address. For 
 Numeric IDs are decimal strings. Item tools default to `asset` and also accept `bundle` where a provider supports it. History and proof pages start at 1, default to 20 records, and accept up to 50 per page. Roblox daily history covers up to 180 returned days. Rolimon's may report more tracked sales than its page includes. Live provider data can shift between page requests. Amounts are in Robux except for fields that explicitly name another currency. A JSON `null` marks an unreported field. Per-source statuses distinguish absent items and unsupported coverage from upstream failures.
 
 The Node process and the extension run independent instances of the same public data layer. The layer deduplicates in-flight calls, caps concurrent upstream requests at four, times requests out, and caches snapshots for up to five minutes. RoUtility trade pages use a two-minute cache. Requests to the three providers omit cookies. The MCP process can start without a browser, Discord session, or Roblox session. It exposes no trading actions.
+
+### Search and rank Limiteds
+
+Pass any combination of filters to `search_limiteds`. The tool returns up to 10 items by default and accepts a `limit` of 1–25.
+
+| Request | Tool arguments |
+| --- | --- |
+| Most liquid at 100k–250k Value with High or Amazing demand, excluding gear and projected items | `{"price":{"basis":"value","min":100000,"max":250000},"demand":["High","Amazing"],"excludeGear":true,"excludeProjected":true,"sort":"sales","limit":10}` |
+| Biggest 14-day Value gains among Amazing-demand items | `{"demand":["Amazing"],"change":{"basis":"value","days":14,"direction":"rising"},"sort":"change"}` |
+| Stable items with falling 30-day RAP and at least five sales | `{"trend":["Stable"],"change":{"basis":"rap","days":30,"direction":"falling"},"sales":{"days":30,"minSold":5}}` |
+| Listed under 200k and at least 5% below Value, ranked by 30-day sales | `{"price":{"basis":"lowest_ask","max":199999},"minDiscountPercent":5,"sales":{"days":30},"sort":"sales"}` |
+
+- **Price and labels.** Price bounds are inclusive. Choose `value` for Rolimon's assigned Value, `rap` for its RAP, or `lowest_ask` for Roblox's lowest resale listing. Demand and trend arrays accept Rolimon's displayed labels. The exclusions require a known non-projected status and, for assets, a known non-gear asset type.
+- **Resales.** `sales.days` accepts 7 or 30 and defaults to 30. `sales.roblox` reports copies sold across the last completed UTC days and the latest day with positive volume in that window. `sales.tracked` supplies a median from individually priced Rolimon's sales in the trailing window, the sample size and coverage, the latest tracked timestamp, and up to three recent sale prices. Use the source and coverage to interpret gaps.
+- **Change.** `change.days` accepts 1–180. `change.direction` optionally selects `rising` or `falling`. The start figure comes from Rolimon's Value log or a tracked pre- or post-sale RAP reading around the cutoff. The end figure comes from the current Rolimon's feed. Results show both figures, the Robux and percentage difference, the latest assigned Value change date where available, and Rolimon's current trend label.
+- **Asks and discounts.** `lowestAsk.checkedAt` is when Roxol read the catalog snapshot. `discountPercent` is 100 × (assigned Value − lowest ask) ÷ assigned Value. A positive number means the ask is below assigned Value. The results include the recent tracked sale prices alongside it.
+- **Sort order and coverage.** Choose `value`, `rap`, `lowest_ask`, `demand`, `sales`, `change` (Robux), `change_percent`, or `discount`. The default follows the first supplied option in this order: change window, sales window, discount threshold, price basis, then assigned Value. The default order is descending except for lowest ask and change sorts filtered to falling. Pass `order` to override it.
+
+When a search needs per-item history, Roxol evaluates up to 60 candidates per call after applying the snapshot filters. Volume searches evaluate higher demand first. Candidate ordering then uses higher Value or RAP, with names and IDs breaking ties. A `partial` result flags a subset or missing required upstream data. `scope` reports coverage and `matched` counts matches in the evaluated batch. For broader searches, reuse the same inputs with `scope.nextCandidateOffset` and compare `sortValue` across batches for a combined shortlist. Live snapshots can move between calls.
 
 ### Whole-trade context
 

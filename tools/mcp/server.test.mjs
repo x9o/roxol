@@ -186,7 +186,7 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   await client.connect(new StreamableHTTPClientTransport(endpoint));
   t.after(() => client.close());
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 8);
+  assert.equal(tools.length, 9);
   assert(tools.every(({ name, annotations }) => annotations.readOnlyHint === (name !== "get_trade_proofs") &&
     annotations.destructiveHint === false));
   const viewProof = (attachment) => client.callTool({ name: "get_trade_proof_image", arguments: { attachment } });

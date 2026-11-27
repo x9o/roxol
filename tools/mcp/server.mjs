@@ -9,6 +9,7 @@ import targets from "../../extension/shared/market_targets.js";
 import { createFaceAliases, createProofClient, loadProofs, proofImage } from "./proofs.mjs";
 import { createScreenshotIndex } from "./proof-screenshots.mjs";
 import { tradeContext, tradeContextInput } from "./trade-context.mjs";
+import { searchLimiteds, searchLimitedsInput } from "./search-limiteds.mjs";
 
 const id = z.string().regex(/^[1-9]\d{0,19}$/).describe("Roblox ID as a decimal string");
 const collectibleInstanceId = z.string().trim().refine((value) => targets.copyIdOf(value) && !targets.idOf(value),
@@ -38,6 +39,8 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
 
   register("find_items", "Find limited assets and bundles by Roblox ID, name, or acronym.",
     z.strictObject({ query, limit }), findItems);
+  register("search_limiteds", "Rank Roblox Limiteds by assigned Rolimon's Value, RAP, Roblox lowest resale ask, demand, 7- or 30-day sales volume, measured Value or RAP change, or discount to Value. Filter by price, demand, trend, gear, projected status, volume, change direction or minimum discount. Returns recent sale evidence and the inputs to each rank. Check scope and use nextCandidateOffset for broad history searches.",
+    searchLimitedsInput, searchLimiteds);
   register("get_item_stats", "Get public item statistics by provider, including RAP, assigned Value, demand, supply and best price where available.",
     z.strictObject(target), itemStats);
   register("get_trade_context", "Gather market statistics, sales and trade proofs for an entire Roblox Limiteds trade, with optional tracked ownership for identified copies. Give and receive are from your perspective. Provide both baskets for nominal received-minus-given RAP and Value. A trade ID alone requires a signed-in Roblox session.",
