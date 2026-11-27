@@ -30,6 +30,8 @@ Open a Limited in Roblox Marketplace to check its price, recent sales, and obser
 
 Supported Roblox profiles and inventories also show RAP and Value totals for loaded copies, a paginated item breakdown, serials where available, and RoliBadges.
 
+![Roblox profile Collections with Roxol Value, demand badges, and sales history buttons on Limited cards](docs/screenshots/profile-collections.png)
+
 ## Trades
 
 Sign in and open Roblox **Trades**. Roxol adds comparisons to the trade lists, the selected trade, and the send and counter forms.
@@ -72,7 +74,9 @@ The bundled **Roxol Trade Analysis** skill assesses a trade screenshot or writte
 3. Make **@Roxol** available in the chat. Attach a trade screenshot or describe what you give, what you receive, and how much Robux is on each side. Include the date for a completed trade if you know it.
 4. Ask, “Was this trade a win, fair, or a loss?” [Skill source](skills/roxol-trade-analysis/SKILL.md)
 
-![Earlier Roxol Trade Analysis example showing a Fair verdict for an 8-Bit Royal Crown downgrade](docs/screenshots/trade-analysis-verdict.png)
+![Roxol Trade Analysis example showing a Slight L verdict for a JJ-to-Fall Peri trade and a table of comparable deals](docs/screenshots/trade-analysis-verdict.png)
+
+![Continuation of the same trade analysis, comparing sale frequency, RAP, and Value history for JJ and Fall Peri](docs/screenshots/trade-analysis-market-context.png)
 
 ## Planned features
 
