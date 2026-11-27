@@ -146,7 +146,8 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   const call = async (name, args) => {
     const result = await client.callTool({ name, arguments: args });
     assert.equal(result.isError, undefined);
-    assert.deepEqual(JSON.parse(result.content[0].text), result.structuredContent);
+    if (name === "get_trade_context") assert.deepEqual(result.content, []);
+    else assert.deepEqual(JSON.parse(result.content[0].text), result.structuredContent);
     return result.structuredContent;
   };
 

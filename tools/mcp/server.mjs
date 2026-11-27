@@ -28,10 +28,10 @@ function createMcp(proofs, readLiveProofs, instanceId) {
       "Prices and history use Robux unless a field explicitly names another currency.",
   });
 
-  function register(name, description, inputSchema, read) {
+  function register(name, description, inputSchema, read, { includeText = true } = {}) {
     server.registerTool(name, { description, inputSchema, annotations }, async (args) => {
       const data = await read(args);
-      return { content: [{ type: "text", text: JSON.stringify(data) }], structuredContent: data };
+      return { content: includeText ? [{ type: "text", text: JSON.stringify(data) }] : [], structuredContent: data };
     });
   }
 
@@ -40,7 +40,7 @@ function createMcp(proofs, readLiveProofs, instanceId) {
   register("get_item_stats", "Get public item statistics by provider, including RAP, assigned Value, demand, supply and best price where available.",
     z.strictObject(target), itemStats);
   register("get_trade_context", "Gather market statistics, sales and trade proofs for an entire Roblox Limiteds trade, with optional tracked ownership for identified copies. Give and receive are from your perspective. Provide both baskets for nominal received-minus-given RAP and Value. A trade ID alone requires a signed-in Roblox session.",
-    tradeContextInput, (args) => tradeContext(args, proofs, readLiveProofs));
+    tradeContextInput, (args) => tradeContext(args, proofs, readLiveProofs), { includeText: false });
   register("get_market_history", "Get one paginated series of Rolimon's tracked sales, assigned Value changes, or Roblox daily resale prices and volumes. Newest observations first.",
     z.strictObject({ ...target, series: z.enum(["rolimons_sales", "rolimons_value_changes", "roblox_resale"]), page, limit }),
     ({ id, kind, ...args }) => history({ id, kind }, args));

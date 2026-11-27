@@ -94,6 +94,8 @@ The Node process and the extension run independent instances of the same public 
 
 ### Whole-trade context
 
+`get_trade_context` returns its result in `structuredContent` with an empty `content` array.
+
 ```json
 {
   "give": { "items": ["SKOTN"], "robux": 0 },
