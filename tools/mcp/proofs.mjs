@@ -3,6 +3,7 @@ import { z } from "zod";
 import targets from "../../extension/shared/market_targets.js";
 
 const proofLink = /^https:\/\/discord\.com\/channels\/415246288779608064\/535250426061258753\/(\d{17,20})$/;
+const nevosNetworkRejection = "Proofs are not available from proxy or datacenter networks.";
 const id = z.string().regex(/^[1-9]\d{0,19}$/);
 const hash = z.string().regex(/^[0-9a-f]{64}$/i);
 const item = z.object({
@@ -21,6 +22,30 @@ const row = z.object({
   robuxBasis: z.string().max(80).nullish(),
   hashes: z.array(hash).min(1).max(20),
 });
+
+async function readNevosForbiddenMessage(body) {
+  if (!body) return undefined;
+  const reader = body.getReader();
+  const buffer = new Uint8Array(4096);
+  let length = 0;
+  try {
+    while (length < buffer.length) {
+      const { done, value } = await reader.read();
+      if (done) {
+        const data = JSON.parse(new TextDecoder().decode(buffer.subarray(0, length)));
+        // Return only the known message. An upstream error body could contain credentials.
+        return data?.error === nevosNetworkRejection ? nevosNetworkRejection : undefined;
+      }
+      const part = value.subarray(0, buffer.length - length);
+      buffer.set(part, length);
+      length += part.length;
+    }
+  } catch {
+    // Keep the HTTP status if the error body fails to read or is not JSON.
+  } finally {
+    void reader.cancel().catch(() => {});
+  }
+}
 
 export function createProofClient(env = process.env) {
   const baseUrl = (env.ROXOL_PROOFS_URL || "https://nevos-extension.com/api/proofs/search").replace(/\/+$/, "");
@@ -57,9 +82,19 @@ export function createProofClient(env = process.env) {
         const now = Date.now();
         const next = /^\d+$/.test(retryAfter ?? "") ? now + Number(retryAfter) * 1000 : Date.parse(retryAfter);
         retryAt = Math.max(retryAt, Number.isFinite(next) ? next : now + 60_000);
+        void response.body?.cancel().catch(() => {});
         return unavailable("rate_limited");
       }
-      if (!response.ok) return unavailable("http_error");
+      if (!response.ok) {
+        const failure = unavailable("http_error");
+        if (httpStatus === 403) {
+          const message = await readNevosForbiddenMessage(response.body);
+          if (message) return { ...failure, message };
+        } else {
+          void response.body?.cancel().catch(() => {});
+        }
+        return failure;
+      }
 
       const data = await response.json();
       if (data?.source?.trim?.() === "edge-cache" || !Array.isArray(data?.results) ||

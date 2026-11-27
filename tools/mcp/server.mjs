@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -14,7 +15,7 @@ const page = z.number().int().min(1).max(10_000).default(1);
 const limit = z.number().int().min(1).max(50).default(20);
 const annotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 
-function createMcp(proofs, readLiveProofs) {
+function createMcp(proofs, readLiveProofs, instanceId) {
   const server = new McpServer({ name: "roxol-market-data", version: "1.0.0" }, {
     instructions: "Find item IDs with find_items. Source statuses and timestamps describe each provider independently. " +
       "RoUtility trades are ownership-transfer observations. Nevos proof posts are user-reported. " +
@@ -43,17 +44,19 @@ function createMcp(proofs, readLiveProofs) {
       .refine(({ id, query }) => Boolean(id) !== Boolean(query), "Provide either id or query."),
     async ({ id: itemId, query, kind, ...args }) => {
       const numericId = itemId ?? id.safeParse(query).data;
-      if (numericId) return tradeProofs(proofs, { id: numericId, kind: kind ?? "asset" }, args, readLiveProofs);
-
-      const search = await findItems({ query, kind, limit: 1 });
-      const [item] = search.items;
-      if (!item) return { query, status: search.status === "ok" ? "not_found" : search.status, sources: search.sources };
-      return tradeProofs(proofs, { id: item.id, kind: item.kind }, args, readLiveProofs);
+      let item = { id: numericId, kind: kind ?? "asset" };
+      if (!numericId) {
+        const search = await findItems({ query, kind, limit: 1 });
+        [item] = search.items;
+        if (!item) return { instanceId, query, status: search.status === "ok" ? "not_found" : search.status, sources: search.sources };
+      }
+      return { instanceId, ...await tradeProofs(proofs, { id: item.id, kind: item.kind }, args, readLiveProofs) };
     });
   return server;
 }
 
 export function createRoxolServer({ proofs = null, publicHost, proofEnv = process.env } = {}) {
+  const instanceId = randomUUID();
   const readLiveProofs = createProofClient(proofEnv);
   const allowedHosts = new Set(["127.0.0.1", "localhost", publicHost?.toLowerCase()].filter(Boolean));
   const allowedOrigins = new Set(["https://chatgpt.com", "https://chat.openai.com"]);
@@ -73,7 +76,7 @@ export function createRoxolServer({ proofs = null, publicHost, proofEnv = proces
       res.writeHead(405, { Allow: "POST" }).end();
       return;
     }
-    const server = createMcp(proofs, readLiveProofs);
+    const server = createMcp(proofs, readLiveProofs, instanceId);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.once("close", () => void server.close());
     try {

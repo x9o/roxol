@@ -24,4 +24,4 @@ Each new Quick Tunnel gets a new URL. Paste the new address into ChatGPT after a
 | Port `8788` is already in use | Roxol may already be running. Close the older launcher or stop the manually started Roxol server before launching a new one. |
 | Missing Node, MCP dependencies, or `cloudflared.exe` | Follow [the one-time installation steps](README.md#1-install-once). The launcher finds Cloudflare on your PATH, in `%LOCALAPPDATA%\Roxol\bin`, or in the existing `%TEMP%\roxol-cloudflared` folder. |
 | ChatGPT can’t connect | Check that the launcher is still open and ChatGPT uses the URL it printed on this run. |
-| Roxol connects, but the Nevos source returns HTTP 403 | The MCP connection is working. Check the Surfshark Bypasser rule for the Node executable Roxol uses. |
+| The proof result shows `nevos.httpStatus: 403` | Roxol received the request. If `nevos.message` reports a proxy or datacenter network, check the full path of the running `node.exe` against Surfshark Bypasser and check the outgoing route. Compare `instanceId` across localhost, the public URL, and ChatGPT to identify the running server. |

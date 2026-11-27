@@ -12,6 +12,7 @@ import { createRoxolServer } from "./server.mjs";
 test("MCP discovers read-only tools and returns source data, cache hits, and proof coverage", async (t) => {
   const assetId = "439945661";
   const proofToken = "fixture-token";
+  const networkRejection = "Proofs are not available from proxy or datacenter networks.";
   const postId = "1450000000000000000";
   const link = `https://discord.com/channels/415246288779608064/535250426061258753/${postId}`;
   const file = path.join(await mkdtemp(path.join(tmpdir(), "roxol-mcp-")), "pilot.json");
@@ -59,7 +60,10 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
       const attachment = "https://nevos-extension.com/api/proofs/images/123456";
       if (nevosFailure === "timeout") throw new DOMException("Timed out", "TimeoutError");
       if (nevosFailure === "network") throw new TypeError("Fetch failed");
-      if (nevosFailure === "403") return new Response(null, { status: 403 });
+      if (nevosFailure === "blocked_route") {
+        return Response.json({ error: networkRejection, token: proofToken }, { status: 403 });
+      }
+      if (nevosFailure === "403") return Response.json({ error: proofToken }, { status: 403 });
       if (nevosFailure === "429") return new Response(null, { status: 429, headers: { "Retry-After": "120" } });
       if (nevosFailure === "decoy") return Response.json({ ok: true, source: "edge-cache" });
       if (nevosFailure === "empty") return Response.json({ item_id: assetId, count: 0, results: [] });
@@ -153,6 +157,7 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   assert.equal("user_a_id" in trades.trades[0], false);
   const proofArgs = { id: assetId };
   const live = await call("get_trade_proofs", { query: " SKOTN ", limit: 1 });
+  assert.match(live.instanceId, /^[0-9a-f-]{36}$/);
   assert.deepEqual(live.item, { id: assetId, kind: "asset" });
   assert.equal(live.evidenceType, "nevos_proof_post");
   assert.equal(live.providerCount, 4);
@@ -173,16 +178,20 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   }
   assert.equal(urls.length, beforeInvalidLookups);
 
-  for (const [failure, reason, status] of [
+  for (const [failure, reason, status, message] of [
     ["decoy", "invalid_proof_response", 200], ["empty", "empty_proof_response", 200],
+    ["blocked_route", "http_error", 403, networkRejection],
     ["403", "http_error", 403], ["network", "request_failed", undefined],
     ["timeout", "timeout", undefined], ["429", "rate_limited", 429],
   ]) {
     nevosFailure = failure;
     const fallback = await call("get_trade_proofs", proofArgs);
+    assert.equal(fallback.instanceId, live.instanceId);
     assert.equal(fallback.evidenceType, "reviewed_screenshot");
     assert.equal(fallback.nevos.reason, reason);
     assert.equal(fallback.nevos.httpStatus, status);
+    assert.equal(fallback.nevos.message, message);
+    assert.equal(JSON.stringify(fallback).includes(proofToken), false);
     assert.equal(fallback.total, 1);
     assert.deepEqual(fallback.records[0].robux, [0, null]);
     assert.equal(fallback.records[0].source, link);

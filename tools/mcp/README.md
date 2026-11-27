@@ -94,6 +94,8 @@ The Node process and the extension run independent instances of the same public 
 
 Pass either `{"id":"439945661"}` or `{"query":"SKOTN"}` to `get_trade_proofs`. Text queries use the same ranked lookup as `find_items`. Provide `kind` to restrict a query to assets or bundles. The live lookup appends the resolved asset ID to the proof-search URL and sends a POST with an empty body and a 20-second timeout. The response includes the post ID, posting timestamp, text, and Nevos image references when available. Live and reviewed results keep the most recent matching record for each post ID before pagination. `total` and `hasMore` reflect the unique records. `providerCount` reports Nevos's original count. The posts contain user-reported evidence.
 
+To verify a deployment, call `get_trade_proofs` for the same ID against localhost, the public tunnel, and ChatGPT. A matching `instanceId` confirms that the results came from the same running Roxol server. It changes when the server restarts. When Roxol returns HTTP 200 with `nevos.httpStatus: 403`, the proof request reached Roxol and Nevos refused the upstream call. If the Nevos response contains its known proxy or datacenter rejection, Roxol includes that sentence in `nevos.message`. Roxol exposes only that allowlisted message from upstream error bodies.
+
 Roxol reads the proof request settings at startup. Set `ROXOL_PROOFS_TOKEN` to a valid Nevos client token in the server's environment or `tools/mcp/.env`. For a PowerShell session, you can enter the token without echoing it or putting it in command history.
 
 ```powershell
