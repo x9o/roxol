@@ -154,16 +154,18 @@ function marketSample({ records, total, hasMore, ...metadata }, ref) {
 function addProofs(result, proofs, ref) {
   for (const row of result.records ?? []) {
     const post = proofs[row.postId] ??= {};
-    if (result.evidenceType === "nevos_proof_post" && !post.nevos) {
+    if (row.attachments && !post.nevos) {
       const { postedAt, content, attachments } = row;
       post.nevos = { postedAt, ...(content ? { content: content.slice(0, 1200) } : {}),
         ...(content?.length > 1200 ? { contentTruncated: true } : {}),
         ...(attachments.length ? { attachments } : {}) };
     }
-    if (result.evidenceType === "reviewed_screenshot" && !post.reviewed) {
-      const { postId, evidenceSha256, ...reviewed } = row;
+    const review = row.reviewed ?? (row.baskets ? row : null);
+    if (review && !post.reviewed) {
+      const { postId, evidenceSha256, screenshots, ...reviewed } = review;
       post.reviewed = reviewed;
     }
+    if (row.screenshots) post.screenshots = row.screenshots;
   }
   return {
     source: ref(result),
@@ -190,7 +192,7 @@ function sideTotals(entries, items, robux, effectiveRobux) {
     itemRap: rap, itemValue: value, totalRap: withRobux(rap), totalValue: withRobux(value) };
 }
 
-export async function tradeContext(args, reviewed, readLiveProofs) {
+export async function tradeContext(args, reviewed, readLiveProofs, proofOptions) {
   const { give, receive, tradeId, proofLimit, ownershipLimit } = args;
   const { sources, ref } = sourceIndex();
   const copyReads = new Map();
@@ -230,7 +232,7 @@ export async function tradeContext(args, reviewed, readLiveProofs) {
       history(item, { series: "rolimons_sales", page, limit: 3 }),
       history(item, { series: "roblox_resale", page, limit: 7 }),
       history(item, { series: "rolimons_value_changes", page, limit: 1 }),
-      proofLimit ? tradeProofs(reviewed, item, { page, limit: proofLimit }, readLiveProofs) : null,
+      proofLimit ? tradeProofs(reviewed, item, { page, limit: proofLimit }, readLiveProofs, proofOptions) : null,
     ]);
     return [key, {
       ...itemSnapshot(stats, resale, ref),

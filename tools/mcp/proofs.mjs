@@ -1,11 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import targets from "../../extension/shared/market_targets.js";
+import market from "../../extension/background/public-market.js";
 
 const proofLink = /^https:\/\/discord\.com\/channels\/415246288779608064\/535250426061258753\/(\d{17,20})$/;
+export const proofImage = /^https:\/\/nevos-extension\.com\/api\/proofs\/images\/(\d{5,32})$/;
 const nevosNetworkRejection = "Proofs are not available from proxy or datacenter networks.";
 const id = z.string().regex(/^[1-9]\d{0,19}$/);
 const hash = z.string().regex(/^[0-9a-f]{64}$/i);
+const faceMapUrl = "https://api.rolimons.com/items/v1/faceassetbundlemap";
 const item = z.object({
   kind: z.enum(["asset", "bundle"]),
   id,
@@ -64,7 +67,7 @@ export function createProofClient(env = process.env) {
   };
   let retryAt = 0;
 
-  return async function readLiveProofs(item) {
+  async function readLiveProofs(item) {
     const source = `${baseUrl}/${item.id}`;
     if (item.kind !== "asset") return { source, status: "unsupported" };
     if (!token) return { source, status: "unavailable", reason: "no_nevos_client_token" };
@@ -111,7 +114,7 @@ export function createProofClient(env = process.env) {
           postedAt: timestamp > 0 && timestamp < 8.64e15 ? new Date(timestamp).toISOString() : null,
           content: typeof row.content === "string" ? row.content : null,
           attachments: Array.isArray(row.attachments) ? row.attachments.filter((url) =>
-            typeof url === "string" && /^https:\/\/nevos-extension\.com\/api\/proofs\/images\/\d{5,32}$/.test(url)) : [],
+            typeof url === "string" && proofImage.test(url)) : [],
         }];
       }).sort((a, b) => (b.postedAt ?? "").localeCompare(a.postedAt ?? "") || b.postId.localeCompare(a.postId));
       if (!records.length) return unavailable("invalid_proof_response");
@@ -120,7 +123,90 @@ export function createProofClient(env = process.env) {
       return unavailable(signal.aborted || error.name === "TimeoutError" ? "timeout" :
         error instanceof SyntaxError ? "invalid_proof_response" : "request_failed");
     }
-  };
+  }
+
+  async function readImage(url) {
+    if (!token || !proofImage.test(url)) return null;
+    const response = await fetch(url, {
+      headers: { ...headers, Accept: "image/*" }, mode, redirect: "error", signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok || !response.body) {
+      void response.body?.cancel().catch(() => {});
+      return null;
+    }
+    const reader = response.body.getReader();
+    const chunks = [];
+    let size = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.length;
+        if (size > 5 * 1024 * 1024) return null;
+        chunks.push(value);
+      }
+    } finally {
+      void reader.cancel().catch(() => {});
+    }
+    const bytes = Buffer.concat(chunks);
+    const mime = bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) ? "png"
+      : bytes.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex")) ? "jpeg"
+      : bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP" ? "webp" : null;
+    return mime ? { bytes, mime } : null;
+  }
+
+  return Object.assign(readLiveProofs, { readImage });
+}
+
+export function indexProof(index, record, baskets) {
+  for (const key of new Set(baskets.flat().filter(({ id }) => id).map(targets.keyOf))) {
+    if (!index.has(key)) index.set(key, []);
+    index.get(key).push(record);
+  }
+}
+
+export function createFaceAliases() {
+  const cache = new Map();
+  return async () => market.cached(cache, faceMapUrl) || market.remember(cache, faceMapUrl,
+    market.request(faceMapUrl).then(({ data }) => {
+      const source = data?.face_asset_bundle_map;
+      if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+      const aliases = new Map();
+      for (const [assetId, value] of Object.entries(source)) {
+        const bundleId = targets.idOf(value);
+        if (!id.safeParse(assetId).success || !bundleId) continue;
+        const asset = { kind: "asset", id: assetId };
+        const bundle = { kind: "bundle", id: bundleId };
+        aliases.set(targets.keyOf(asset), [bundle]);
+        const key = targets.keyOf(bundle);
+        if (!aliases.has(key)) aliases.set(key, []);
+        aliases.get(key).push(asset);
+      }
+      return aliases;
+    }).catch(() => null), 1, 30 * 60_000);
+}
+
+const received = (amount) => Math.round(amount * 0.7);
+
+export function proofRobux(baskets, payments, itemTotals = []) {
+  const robux = payments.map(({ amount, basis }) => {
+    const offered = amount === 0 || basis === "offered" ? amount : null;
+    const credited = amount === 0 || basis === "after_fee" ? amount : offered === null ? null : received(offered);
+    return { amount, basis, offered, credited };
+  });
+  const subtract = (incoming, outgoing) => incoming == null || outgoing == null ? null : incoming - outgoing;
+  const netRobux = robux.map((outgoing, side) => subtract(robux[1 - side].credited, outgoing.offered));
+  const creditedDifference = subtract(robux[1].credited, robux[0].credited);
+  const totals = (field) => baskets.map((basket, side) => {
+    const shownTotal = itemTotals[side]?.[field] ?? null;
+    if (basket.some((item) => item[field] == null || item.quantity == null)) return shownTotal;
+    const sum = basket.reduce((total, item) => total + item[field] * item.quantity, 0);
+    return shownTotal === null || shownTotal === sum ? sum : null;
+  });
+  const difference = ([a, b]) => [subtract(b, a), subtract(a, b)].map((items, side) =>
+    items == null || netRobux[side] == null ? null : items + netRobux[side]);
+  return { robux, netRobux, creditedDifference, netRap: difference(totals("rap")), netValue: difference(totals("value")),
+    netDisplayedPrice: difference(totals("displayedPrice")) };
 }
 
 export async function loadProofs(file) {
@@ -134,9 +220,14 @@ export async function loadProofs(file) {
       throw new Error(`Invalid reviewed public proof at index ${index}.`);
     }
     const { id, link, date, offset, baskets, robux, robuxBasis, hashes } = parsed.data;
+    const basis = /^(offered|gross|before_fee)$/.test(robuxBasis ?? "") ? "offered"
+      : /^(net|after_fee|after_30_percent_fee)$/.test(robuxBasis ?? "") ? "after_fee" : "unknown";
     return [{ postId: id, source: link, completedAtReported: date, offsetMinutes: offset ?? null,
-      baskets, robux, robuxBasis: robuxBasis ?? null, evidenceSha256: hashes }];
+      baskets, robux, robuxBasis: robuxBasis ?? null, evidenceSha256: hashes,
+      afterFees: proofRobux(baskets, robux.map((amount) => ({ amount, basis }))) }];
   });
   records.sort((a, b) => b.completedAtReported.localeCompare(a.completedAtReported) || b.postId.localeCompare(a.postId));
-  return { loadedAt: Date.now(), records };
+  const byItem = new Map();
+  for (const record of records) indexProof(byItem, record, record.baskets);
+  return { loadedAt: Date.now(), records, byItem };
 }

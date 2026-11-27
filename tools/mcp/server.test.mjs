@@ -6,10 +6,11 @@ import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { tradeProofs } from "./data.mjs";
-import { createProofClient, loadProofs } from "./proofs.mjs";
+import { createFaceAliases, createProofClient, loadProofs, proofRobux } from "./proofs.mjs";
+import { createScreenshotIndex } from "./proof-screenshots.mjs";
 import { createRoxolServer } from "./server.mjs";
 
-test("MCP discovers read-only tools and returns source data, cache hits, and proof coverage", async (t) => {
+test("MCP discovers tools and returns source data, cache hits, and proof coverage", async (t) => {
   const assetId = "439945661";
   const uaid = "9007199254740993";
   const collectibleInstanceId = "c90b0e8f-45ce-4cb9-9a4c-9f68cce9b3f9";
@@ -17,6 +18,13 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   const networkRejection = "Proofs are not available from proxy or datacenter networks.";
   const postId = "1450000000000000000";
   const link = `https://discord.com/channels/415246288779608064/535250426061258753/${postId}`;
+  const attachment = "https://nevos-extension.com/api/proofs/images/123456";
+  const partialAttachment = "https://nevos-extension.com/api/proofs/images/123457";
+  const indexDirectory = await mkdtemp(path.join(tmpdir(), "roxol-screenshot-index-"));
+  t.after(async () => {
+    await rm(path.join(indexDirectory, `${postId}-123456.json`), { force: true });
+    await rmdir(indexDirectory);
+  });
   const file = path.join(await mkdtemp(path.join(tmpdir(), "roxol-mcp-")), "pilot.json");
   t.after(() => rm(file).then(() => rmdir(path.dirname(file))));
   const entry = {
@@ -36,13 +44,39 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   const originalFetch = globalThis.fetch;
   const urls = [];
   let nevosFailure = null;
+  let visionRequests = 0;
+  let imageStatus = "completed";
   t.mock.method(globalThis, "fetch", (input, init) => {
     const url = new URL(input instanceof Request ? input.url : input);
     if (url.hostname === "127.0.0.1") return originalFetch(input, init);
     urls.push(url.href);
+    if (url.href === attachment || url.href === partialAttachment) {
+      assert.equal(init.headers["X-Nte-Client"], proofToken);
+      return new Response(Buffer.from("89504e470d0a1a0a", "hex"));
+    }
+    if (url.hostname === "api.openai.com") {
+      visionRequests++;
+      const request = JSON.parse(init.body);
+      assert.equal(request.store, false);
+      assert.match(request.input[0].content[0].image_url, /^data:image\/png;base64,/);
+      assert.equal(init.headers.Authorization, "Bearer fixture-vision");
+      const item = (name, rap, value, extra = {}) => ({
+        name, id: null, kind: null, quantity: 1, serial: null, rap, value, displayedPrice: rap, ...extra,
+      });
+      return Response.json({ status: "completed", output: [{ type: "message", content: [{ type: "output_text",
+        text: JSON.stringify({
+          status: imageStatus,
+          sideA: { items: [item("Silver King of the Night", 10000, null, { quantity: 2 })],
+            itemTotals: { rap: null, value: 24000, displayedPrice: 20000 },
+            robux: { amount: 20, basis: "offered" } },
+          sideB: { items: [item("Fixture Face", 14000, 15000), item("OL", 8000, 10000, { serial: "3" })],
+            itemTotals: { rap: 22000, value: null, displayedPrice: null },
+            robux: { amount: 100, basis: "offered" } },
+        }) }] }] });
+    }
     if (url.hostname === "nevos-extension.com") {
       const proofItem = url.pathname.split("/").at(-1);
-      assert.ok([assetId, "9"].includes(proofItem));
+      assert.ok([assetId, "9", "10", "44444"].includes(proofItem));
       assert.equal(url.search, "");
       assert.equal(init.method, "POST");
       assert.equal(init.body, undefined);
@@ -60,7 +94,6 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "none",
       });
-      const attachment = "https://nevos-extension.com/api/proofs/images/123456";
       if (nevosFailure === "timeout") throw new DOMException("Timed out", "TimeoutError");
       if (nevosFailure === "network") throw new TypeError("Fetch failed");
       if (nevosFailure === "blocked_route") {
@@ -69,7 +102,9 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
       if (nevosFailure === "403") return Response.json({ error: proofToken }, { status: 403 });
       if (nevosFailure === "429") return new Response(null, { status: 429, headers: { "Retry-After": "120" } });
       if (nevosFailure === "decoy") return Response.json({ ok: true, source: "edge-cache" });
-      if (nevosFailure === "empty") return Response.json({ item_id: proofItem, count: 0, results: [] });
+      if (nevosFailure === "empty" || ["10", "44444"].includes(proofItem)) {
+        return Response.json({ item_id: proofItem, count: 0, results: [] });
+      }
       return Response.json({ item_id: Number(proofItem), count: 4, results: [
         { id: postId, content: "Trade screenshot", attachments: [attachment, "https://example.com/offsite"] },
         { id: "1450000001000000000", timestamp: 1766000000000, content: "Older duplicate" },
@@ -77,11 +112,14 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
       ] });
     }
     assert.equal(init.credentials, "omit");
+    if (url.pathname === "/items/v1/faceassetbundlemap") {
+      return Response.json({ face_asset_bundle_map: { "44444": 12345 } });
+    }
     if (url.hostname === "api.rolimons.com") return Response.json({ success: true, assets: {
       [assetId]: ["Silver King of the Night ", "SKOTN", 10000, 12000, 12000, 3, 2, -1, -1, -1],
       "9": ["Other Limited", "OL", 22000, -1, 22000, 3, 2, -1, -1, -1],
       "10": ["OL", "", 31000, 33000, 33000, 3, 2, -1, -1, -1],
-    } });
+    }, bundles: { "12345": ["Fixture Face", "", 14000, 15000, 15000, 3, 2, -1, -1, -1] } });
     if (url.pathname === "/api/public/items") return Response.json({ items: [{
       id: assetId, name: "Silver King of the Night", rap: 10000, value: 0, copies: 220,
     }] });
@@ -133,7 +171,12 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
     throw new Error(`Unexpected fixture URL ${url.href}`);
   });
 
-  const server = createRoxolServer({ proofs, proofEnv: { ROXOL_PROOFS_TOKEN: proofToken } }).listen(0, "127.0.0.1");
+  const readAliases = createFaceAliases();
+  const readLiveProofs = createProofClient({ ROXOL_PROOFS_TOKEN: proofToken });
+  const screenshotOptions = { env: { ROXOL_PROOF_VISION_KEY: "fixture-vision", ROXOL_PROOF_INDEX_DIR: indexDirectory },
+    readAliases, readImage: readLiveProofs.readImage };
+  const screenshots = await createScreenshotIndex(screenshotOptions);
+  const server = createRoxolServer({ proofs, readLiveProofs, readAliases, screenshots }).listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   const endpoint = new URL(`http://127.0.0.1:${server.address().port}/mcp`);
   t.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
@@ -142,7 +185,8 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   t.after(() => client.close());
   const { tools } = await client.listTools();
   assert.equal(tools.length, 7);
-  assert(tools.every(({ annotations }) => annotations.readOnlyHint === true && annotations.destructiveHint === false));
+  assert(tools.every(({ name, annotations }) => annotations.readOnlyHint === (name !== "get_trade_proofs") &&
+    annotations.destructiveHint === false));
   const call = async (name, args) => {
     const result = await client.callTool({ name, arguments: args });
     assert.equal(result.isError, undefined);
@@ -229,9 +273,41 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   assert.equal(older.records[0].content, "Trade screenshot");
   assert.deepEqual(older.records[0].attachments, ["https://nevos-extension.com/api/proofs/images/123456"]);
 
+  const parsed = await call("get_trade_proofs", { ...proofArgs, readScreenshots: true, limit: 1, page: 2 });
+  const [screenshot] = parsed.records[0].screenshots;
+  assert.equal(screenshot.status, "indexed");
+  assert.equal(screenshot.baskets[0][0].quantity, 2);
+  assert.deepEqual(screenshot.baskets[1].map(({ kind, id }) => [kind, id]), [["bundle", "12345"], ["asset", "10"]]);
+  assert.equal(screenshot.baskets[1][1].serial, "3");
+  assert.deepEqual(screenshot.afterFees, {
+    robux: [
+      { amount: 20, basis: "offered", offered: 20, credited: 14 },
+      { amount: 100, basis: "offered", offered: 100, credited: 70 },
+    ],
+    netRobux: [50, -86], creditedDifference: 56, netRap: [2050, -2086], netValue: [1050, -1086],
+    netDisplayedPrice: [2050, -2086],
+  });
+  for (const lookup of [{ id: "10" }, { id: "44444" }, { kind: "bundle", id: "12345" }]) {
+    const result = await call("get_trade_proofs", lookup);
+    assert.equal(result.nevos.reason, "empty_proof_response");
+    assert.equal(result.total, 1);
+    assert.deepEqual(result.records[0].screenshots, [screenshot]);
+  }
+  await call("get_trade_proofs", { ...proofArgs, readScreenshots: true, limit: 1, page: 2 });
+  assert.equal(visionRequests, 1);
+  imageStatus = "incomplete";
+  const partial = await screenshots.read(parsed.records[0], partialAttachment);
+  assert.equal(partial.status, "incomplete");
+  assert.equal(partial.afterFees, undefined);
+  assert.deepEqual(screenshots.forPost(postId), [screenshot]);
+  const reloaded = await createScreenshotIndex(screenshotOptions);
+  const restored = await tradeProofs(null, { kind: "asset", id: "44444" }, { page: 1, limit: 1 },
+    readLiveProofs, { readAliases: async () => null, screenshots: reloaded });
+  assert.deepEqual(restored.records[0].screenshots, [screenshot]);
+
   const context = await call("get_trade_context", {
     give: { items: ["SKOTN", { query: "Silver King of the Night", uaid }], robux: 100 },
-    receive: { items: ["9"], robux: 300 }, tradeId: "123", proofLimit: 1, ownershipLimit: 2,
+    receive: { items: ["9"], robux: 300 }, tradeId: "123", proofLimit: 2, ownershipLimit: 2,
   });
   const givenKey = `asset:${assetId}`;
   assert.deepEqual(Object.keys(context.items), [givenKey, "asset:9"]);
@@ -252,7 +328,8 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   assert.equal(context.ownership[uaid].hasMore, true);
   assert.equal(context.ownership[uaid].records.length, 2);
   assert.equal(context.sources[context.tradeLookup].reason, "requires_authorized_roblox_session");
-  assert.equal(Object.keys(context.proofs).length, 1);
+  assert.equal(Object.keys(context.proofs).length, 2);
+  assert.deepEqual(context.proofs[postId].screenshots, [screenshot]);
   assert.deepEqual(context.items[givenKey].proofs.postIds, context.items["asset:9"].proofs.postIds);
 
   const byCopy = await call("get_trade_context", {
@@ -324,6 +401,18 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   assert.equal((await originalFetch(endpoint, { method: "POST", headers: { Origin: "https://example.com" } })).status, 403);
 });
 
+test("proof Robux distinguishes gross offers, credited amounts, and unreadable amounts", () => {
+  const baskets = [[{ quantity: 1, rap: 100 }], [{ quantity: 1, rap: 200 }]];
+  const result = proofRobux(baskets, [{ amount: 0, basis: "unknown" }, { amount: 70, basis: "after_fee" }]);
+  assert.deepEqual(result.netRobux, [70, null]);
+  assert.deepEqual(result.netRap, [170, null]);
+  assert.deepEqual(result.netValue, [null, null]);
+  assert.equal(result.creditedDifference, 70);
+  const unknown = proofRobux(baskets, [{ amount: null, basis: "unknown" }, { amount: 10, basis: "unknown" }]);
+  assert.deepEqual(unknown.netRobux, [null, null]);
+  assert.equal(unknown.creditedDifference, null);
+});
+
 test("Nevos proof requests use configured URL and header overrides", async (t) => {
   const readLiveProofs = createProofClient({
     ROXOL_PROOFS_URL: "https://proofs.example/search/",
@@ -363,7 +452,7 @@ test("Missing Nevos credentials skip live requests and preserve the reviewed fal
   });
   const item = { id: "439945661", kind: "asset" };
   const record = { postId: "1450000000000000000", baskets: [[item], []] };
-  const reviewed = { loadedAt: Date.now(), records: [record] };
+  const reviewed = { loadedAt: Date.now(), records: [record], byItem: new Map([["asset:439945661", [record]]]) };
   const result = await tradeProofs(reviewed, item, { page: 1, limit: 20 }, createProofClient({}));
   assert.equal(result.evidenceType, "reviewed_screenshot");
   assert.equal(result.nevos.reason, "no_nevos_client_token");

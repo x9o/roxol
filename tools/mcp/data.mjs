@@ -224,17 +224,64 @@ function pageOfProofs(records, page, limit) {
   return pageOf(Array.from(unique.values()), page, limit);
 }
 
-export async function tradeProofs(proofs, item, { page, limit }, readLiveProofs) {
-  const nevos = await readLiveProofs(item);
+export async function tradeProofs(proofs, item, { page, limit, readScreenshots, screenshotOffset = 0 }, readLiveProofs,
+  { readAliases, screenshots } = {}) {
+  const aliases = readAliases && (item.kind === "bundle" || proofs?.records.length || screenshots?.byItem.size)
+    ? await readAliases() : null;
+  const equivalents = aliases?.get(keyOf(item)) ?? [];
+  const keys = [item, ...equivalents].map(keyOf);
+  const reviewed = keys.flatMap((key) => proofs?.byItem.get(key) ?? [])
+    .sort((a, b) => b.completedAtReported.localeCompare(a.completedAtReported) || b.postId.localeCompare(a.postId));
+  const indexed = new Map();
+  for (const record of keys.flatMap((key) => screenshots?.byItem.get(key) ?? [])) {
+    indexed.set(record.postId, { postId: record.postId, postedAt: record.postedAt });
+  }
+  const nevos = await readLiveProofs(item.kind === "bundle" && equivalents.length === 1 ? equivalents[0] : item);
+  const recentFirst = (a, b) => (b.postedAt ?? "").localeCompare(a.postedAt ?? "") || b.postId.localeCompare(a.postId);
+
+  let result;
   if (nevos.status === "ok") {
-    return { item, ...observed(nevos.source, Date.now()), evidenceType: "nevos_proof_post",
-      providerCount: count(nevos.count), ...pageOfProofs(nevos.records, page, limit) };
+    const posts = new Map();
+    for (const record of reviewed) {
+      if (!posts.has(record.postId)) posts.set(record.postId, { postedAt: record.completedAtReported, ...record });
+    }
+    for (const record of indexed.values()) {
+      if (!posts.has(record.postId)) posts.set(record.postId, record);
+    }
+    for (const record of nevos.records) {
+      if (posts.get(record.postId)?.attachments) continue;
+      const reviewed = posts.get(record.postId);
+      posts.set(record.postId, { ...record, ...(reviewed?.baskets ? { reviewed } : {}) });
+    }
+    result = { item, ...observed(nevos.source, Date.now()), evidenceType: "nevos_proof_post",
+      providerCount: count(nevos.count), ...pageOfProofs([...posts.values()].sort(recentFirst), page, limit) };
+  } else {
+    const source = "https://discord.com/channels/415246288779608064/535250426061258753";
+    if (!proofs && !indexed.size) {
+      return { item, source, status: "unavailable", reason: "no_reviewed_public_proof_export_configured", nevos };
+    }
+    const reviewedPosts = new Set(reviewed.map(({ postId }) => postId));
+    const records = [...reviewed, ...[...indexed.values()].filter(({ postId }) => !reviewedPosts.has(postId))]
+      .sort((a, b) => recentFirst({ ...a, postedAt: a.completedAtReported ?? a.postedAt },
+        { ...b, postedAt: b.completedAtReported ?? b.postedAt }));
+    result = { item, ...observed(source, proofs?.loadedAt ?? Date.now()),
+      evidenceType: reviewed.length || !indexed.size ? "reviewed_screenshot" : "nevos_screenshot",
+      nevos, ...pageOfProofs(records, page, limit) };
   }
 
-  const source = "https://discord.com/channels/415246288779608064/535250426061258753";
-  if (!proofs) return { item, source, status: "unavailable", reason: "no_reviewed_public_proof_export_configured", nevos };
-  const records = proofs.records.filter(({ baskets }) =>
-    baskets.some((basket) => basket.some(({ kind, id }) => item.kind === kind && item.id === id)));
-  return { item, ...observed(source, proofs.loadedAt), evidenceType: "reviewed_screenshot", nevos,
-    ...pageOfProofs(records, page, limit) };
+  let position = 0;
+  result.records = await Promise.all(result.records.map(async (record) => {
+    const stored = screenshots?.forPost(record.postId) ?? [];
+    const known = new Set(stored.map(({ attachment }) => attachment));
+    const attachments = [...new Set(record.attachments)];
+    const start = position;
+    position += attachments.length;
+    const selected = readScreenshots && screenshots ? attachments.filter((attachment, offset) =>
+      start + offset >= screenshotOffset && start + offset < screenshotOffset + 12 && !known.has(attachment)) : [];
+    const unprocessed = attachments.some((attachment) => !known.has(attachment) && !selected.includes(attachment));
+    const evidence = [...stored, ...await Promise.all(selected.map((attachment) => screenshots.read(record, attachment)))];
+    return { ...record, ...(evidence.length ? { screenshots: evidence } : {}),
+      ...(readScreenshots && unprocessed ? { moreScreenshots: true } : {}) };
+  }));
+  return result;
 }
