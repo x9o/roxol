@@ -68,7 +68,11 @@ Open **Plugins → Add → Add custom MCP server** in ChatGPT. [OpenAI connectio
 | Server URL | Your tunnel's HTTPS URL followed by `/mcp`, such as `https://your-tunnel.trycloudflare.com/mcp` |
 | Authentication | **No authentication** |
 
-Create and install the plugin. Check that ChatGPT lists six tools, then select **@Roxol** in a chat and ask for the current stats for Black Iron Antlers. If discovery fails, check that both PowerShell windows are running and that the plugin URL uses the current hostname and ends in `/mcp`.
+Create and install the plugin. Check that ChatGPT lists seven tools, then select **@Roxol** in a chat and ask for the current stats for Black Iron Antlers. If discovery fails, check that both PowerShell windows are running and that the plugin URL uses the current hostname and ends in `/mcp`.
+
+### Use the trade analysis skill
+
+In a ChatGPT workspace with skill uploads enabled, open **Plugins → Skills → Add → Upload from your computer** and choose the [Roxol Trade Analysis ZIP](../../skills/roxol-trade-analysis.zip). With the Roxol connector available in the chat, attach a Limiteds trade screenshot or describe what you give and receive. The [skill](../../skills/roxol-trade-analysis/SKILL.md) uses `get_trade_context` first and follows up when more evidence could affect the verdict. [Skills in ChatGPT](https://help.openai.com/en/articles/20001066-skills-in-chatgpt)
 
 ### Stop or restart
 

@@ -14,6 +14,7 @@ Roxol is a Chrome and Edge extension for Roblox limited items and trading. It us
 - **Reference links** to Rolimon's item, bundle, sales, and player pages. Trade offers and the inventory picker show an external link beside each item's Rolimon's value.
 - **Toolbar popup and settings** with Roblox sign-in status, Trades tab detection, an **Open Trades** shortcut, and preferences grouped by feature.
 - **Read-only market data MCP** for item lookup, statistics, market history, trade observations, and copy ownership history. `get_trade_context` combines both offers, nominal RAP and Value differences, recent sales, deduplicated proofs, and optional copy history in one call. Nevos proof lookups use a client token configured on the server. A reviewed export can supply proofs when live results are empty or unavailable. The MCP runs as a separate Node process and shares the extension's public market request code. [Windows launcher](tools/mcp/WINDOWS-LAUNCHER.md) · [MCP setup and ChatGPT connection](tools/mcp/README.md)
+- **Roxol Trade Analysis skill** for assessing a Roblox Limiteds screenshot or described exchange in ChatGPT. Import the [skill ZIP](skills/roxol-trade-analysis.zip) and make the Roxol connector available in the chat. The skill uses market data and comparable exchanges to explain a Win, Fair, or Loss verdict and its confidence. [Skill source](skills/roxol-trade-analysis/SKILL.md)
 
 ## Planned features
 
