@@ -70,6 +70,10 @@ Roxol's Model Context Protocol (MCP) server gives ChatGPT live market lookups fr
 
 ![The same Roxol lookup showing tracked sales, Rolimon's Value changes, and source links](docs/screenshots/mcp-market-history.png)
 
+In this example, `search_limiteds` found nine Limiteds under 50,000 Rolimon's Value that gained Value over seven days. All nine carried Rolimon's **Stable** trend tag at the time. ChatGPT ranked them by percentage gain and displayed demand, the lowest resale ask, and 30-day sales volume for comparison.
+
+![Roxol in ChatGPT ranking nine Limiteds under 50,000 Value by seven-day percentage gain](docs/screenshots/mcp-search-limiteds.png)
+
 ## Roxol Trade Analysis skill
 
 The bundled **Roxol Trade Analysis** skill assesses a trade screenshot or written offer from your perspective. It opens with a **Win**, **Fair**, or **Loss** verdict, its confidence, and the fee-adjusted overpay you pay or receive. It benchmarks that amount against recent same-direction trade proofs, with a linked table of the strongest comparisons and a count of independent deals. The analysis uses demand, recorded sale prices and frequency, Value changes, and projection flags to explain how each basket affects the call. When your screenshot shows both baskets, the analysis skips the item recap.
