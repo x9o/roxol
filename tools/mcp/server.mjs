@@ -7,6 +7,7 @@ import { z } from "zod";
 import { copyHistory, findItems, itemStats, history, tradeObservations, tradeProofs } from "./data.mjs";
 import targets from "../../extension/shared/market_targets.js";
 import { createProofClient, loadProofs } from "./proofs.mjs";
+import { tradeContext, tradeContextInput } from "./trade-context.mjs";
 
 const id = z.string().regex(/^[1-9]\d{0,19}$/).describe("Roblox ID as a decimal string");
 const collectibleInstanceId = z.string().trim().refine((value) => targets.copyIdOf(value) && !targets.idOf(value),
@@ -38,6 +39,8 @@ function createMcp(proofs, readLiveProofs, instanceId) {
     z.strictObject({ query, limit }), findItems);
   register("get_item_stats", "Get public item statistics by provider, including RAP, assigned Value, demand, supply and best price where available.",
     z.strictObject(target), itemStats);
+  register("get_trade_context", "Gather market statistics, sales and trade proofs for an entire Roblox Limiteds trade, with optional tracked ownership for identified copies. Give and receive are from your perspective. Provide both baskets for nominal received-minus-given RAP and Value. A trade ID alone requires a signed-in Roblox session.",
+    tradeContextInput, (args) => tradeContext(args, proofs, readLiveProofs));
   register("get_market_history", "Get one paginated series of Rolimon's tracked sales, assigned Value changes, or Roblox daily resale prices and volumes. Newest observations first.",
     z.strictObject({ ...target, series: z.enum(["rolimons_sales", "rolimons_value_changes", "roblox_resale"]), page, limit }),
     ({ id, kind, ...args }) => history({ id, kind }, args));

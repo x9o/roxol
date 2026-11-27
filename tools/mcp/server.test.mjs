@@ -41,7 +41,8 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
     if (url.hostname === "127.0.0.1") return originalFetch(input, init);
     urls.push(url.href);
     if (url.hostname === "nevos-extension.com") {
-      assert.equal(url.pathname, `/api/proofs/search/${assetId}`);
+      const proofItem = url.pathname.split("/").at(-1);
+      assert.ok([assetId, "9"].includes(proofItem));
       assert.equal(url.search, "");
       assert.equal(init.method, "POST");
       assert.equal(init.body, undefined);
@@ -68,8 +69,8 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
       if (nevosFailure === "403") return Response.json({ error: proofToken }, { status: 403 });
       if (nevosFailure === "429") return new Response(null, { status: 429, headers: { "Retry-After": "120" } });
       if (nevosFailure === "decoy") return Response.json({ ok: true, source: "edge-cache" });
-      if (nevosFailure === "empty") return Response.json({ item_id: assetId, count: 0, results: [] });
-      return Response.json({ item_id: Number(assetId), count: 4, results: [
+      if (nevosFailure === "empty") return Response.json({ item_id: proofItem, count: 0, results: [] });
+      return Response.json({ item_id: Number(proofItem), count: 4, results: [
         { id: postId, content: "Trade screenshot", attachments: [attachment, "https://example.com/offsite"] },
         { id: "1450000001000000000", timestamp: 1766000000000, content: "Older duplicate" },
         { id: "1450000001000000000", timestamp: 1767000000000, attachments: [] },
@@ -77,7 +78,9 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
     }
     assert.equal(init.credentials, "omit");
     if (url.hostname === "api.rolimons.com") return Response.json({ success: true, assets: {
-      [assetId]: ["Silver King of the Night", "SKOTN", 10000, 12000, 12000, 3, 2, -1, -1, -1],
+      [assetId]: ["Silver King of the Night ", "SKOTN", 10000, 12000, 12000, 3, 2, -1, -1, -1],
+      "9": ["Other Limited", "OL", 22000, -1, 22000, 3, 2, -1, -1, -1],
+      "10": ["OL", "", 31000, 33000, 33000, 3, 2, -1, -1, -1],
     } });
     if (url.pathname === "/api/public/items") return Response.json({ items: [{
       id: assetId, name: "Silver King of the Night", rap: 10000, value: 0, copies: 220,
@@ -94,6 +97,7 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
       return new Response('var item_sales = {"timestamp_list":[1763769600],"sale_price_list":[12345],"sale_rap_list":[12000]};');
     }
     if (url.pathname.endsWith("/resale-data")) {
+      if (url.pathname.includes("/777/")) return new Response(null, { status: 404 });
       const date = "2026-11-21T00:00:00Z";
       const yesterday = "2026-11-20T00:00:00Z";
       const older = "2026-11-19T00:00:00Z";
@@ -137,7 +141,7 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   await client.connect(new StreamableHTTPClientTransport(endpoint));
   t.after(() => client.close());
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 6);
+  assert.equal(tools.length, 7);
   assert(tools.every(({ annotations }) => annotations.readOnlyHint === true && annotations.destructiveHint === false));
   const call = async (name, args) => {
     const result = await client.callTool({ name, arguments: args });
@@ -223,6 +227,60 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   assert.equal(older.records[0].postId, postId);
   assert.equal(older.records[0].content, "Trade screenshot");
   assert.deepEqual(older.records[0].attachments, ["https://nevos-extension.com/api/proofs/images/123456"]);
+
+  const context = await call("get_trade_context", {
+    give: { items: ["SKOTN", { query: "Silver King of the Night", uaid }], robux: 100 },
+    receive: { items: ["9"], robux: 300 }, tradeId: "123", proofLimit: 1, ownershipLimit: 2,
+  });
+  const givenKey = `asset:${assetId}`;
+  assert.deepEqual(Object.keys(context.items), [givenKey, "asset:9"]);
+  assert.equal(context.give.totalRap, 20100);
+  assert.equal(context.give.totalValue, 24100);
+  assert.equal(context.receive.effectiveRobux, 210);
+  assert.equal(context.receive.totalValue, 22210);
+  assert.deepEqual(context.nominalWL, { rap: 2110, value: -1890 });
+  assert.equal(context.items["asset:9"].valueBasis, "rap");
+  assert.equal(context.items[givenKey].sales.records[0].price, 12345);
+  assert.equal(context.items[givenKey].robloxResale.records[0].volume, 4);
+  assert.equal(context.sources[context.items[givenKey].sources.rolimonsDailySales].httpStatus, 403);
+  assert.equal(context.items[givenKey].sources.rolimons, context.items["asset:9"].sources.rolimons);
+  assert.equal(context.give.items[0].copy, undefined);
+  assert.equal(context.give.items[1].copy.collectibleInstanceId, collectibleInstanceId);
+  assert.equal(context.ownership[uaid].records.filter(({ hidden }) => hidden).length, 1);
+  assert.equal(context.ownership[uaid].records[0].current, true);
+  assert.equal(context.ownership[uaid].hasMore, true);
+  assert.equal(context.ownership[uaid].records.length, 2);
+  assert.equal(context.sources[context.tradeLookup].reason, "requires_authorized_roblox_session");
+  assert.equal(Object.keys(context.proofs).length, 1);
+  assert.deepEqual(context.items[givenKey].proofs.postIds, context.items["asset:9"].proofs.postIds);
+
+  const byCopy = await call("get_trade_context", {
+    give: { items: [{ collectibleInstanceId }] }, receive: { items: [{ query: "OL" }] }, proofLimit: 0,
+  });
+  assert.equal(byCopy.give.items[0].item, givenKey);
+  assert.equal(byCopy.give.items[0].copy.uaid, uaid);
+  assert.equal(byCopy.receive.items[0].resolution, "ambiguous");
+  assert.equal(byCopy.nominalWL.rap, null);
+  assert.equal(byCopy.ownership, undefined);
+  assert.equal(byCopy.proofs, undefined);
+
+  const mismatch = await call("get_trade_context", {
+    give: { items: [{ id: "9", uaid }] }, receive: { items: [{ id: "777" }] }, proofLimit: 0, ownershipLimit: 1,
+  });
+  assert.equal(mismatch.give.items[0].copyStatus, "mismatch");
+  assert.deepEqual(mismatch.ownership, {});
+  assert.equal(mismatch.receive.totalRap, null);
+  assert.equal(mismatch.nominalWL.value, null);
+
+  const onlyTradeId = await call("get_trade_context", { tradeId: "123" });
+  assert.equal(onlyTradeId.give, null);
+  assert.equal(onlyTradeId.receive, null);
+  assert.equal(onlyTradeId.nominalWL.value, null);
+  assert.equal(urls.some((url) => url.includes("trades.roblox.com")), false);
+  for (const args of [{}, { proofLimit: 11 }, { give: { items: [{ id: assetId, quantity: 2, uaid }] } },
+    { give: { items: [{ id: assetId, quantity: 4 }, "SKOTN"] } }]) {
+    assert.equal((await client.callTool({ name: "get_trade_context", arguments: args })).isError, true);
+  }
   const beforeInvalidLookups = urls.length;
   assert.equal((await call("get_trade_proofs", { ...proofArgs, kind: "bundle" })).nevos.status, "unsupported");
   assert.equal((await call("get_trade_proofs", { query: "missing item" })).status, "not_found");
@@ -254,6 +312,13 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   assert.equal(beyond.nevos.reason, "rate_limited");
   assert.deepEqual(beyond.records, []);
   assert.equal(urls.length, requestCount);
+  const reviewedContext = await call("get_trade_context", {
+    give: { items: [{ id: assetId, quantity: 2 }] }, receive: { items: ["Other Limited"] },
+  });
+  assert.deepEqual(Object.keys(reviewedContext.proofs), [postId]);
+  assert.deepEqual(reviewedContext.proofs[postId].reviewed.robux, [0, null]);
+  assert.equal(reviewedContext.items["asset:9"].proofs.postIds[0], postId);
+  assert.equal(reviewedContext.sources[reviewedContext.items["asset:9"].proofs.nevos].httpStatus, 429);
   assert.equal((await client.callTool({ name: "get_item_stats", arguments: { id: "https://example.com" } })).isError, true);
   assert.equal((await originalFetch(endpoint, { method: "POST", headers: { Origin: "https://example.com" } })).status, 403);
 });

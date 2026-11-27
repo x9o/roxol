@@ -44,7 +44,7 @@ function snapshot(source, row, feedAvailable, checkedAt) {
   return { ...observed(source, checkedAt ?? row.checkedAt), data: row };
 }
 
-export async function findItems({ query, limit, kind }) {
+export async function findItems({ query, limit, kind, exact = false }) {
   const [feed, utility] = await Promise.all([market.readItemFeed(), readUtility()]);
   const names = new Map();
   for (const [key, item] of feed ?? []) {
@@ -59,10 +59,10 @@ export async function findItems({ query, limit, kind }) {
   const matches = [];
   for (const item of names.values()) {
     if (kind && item.kind !== kind) continue;
-    const name = item.name.toLowerCase();
-    const score = item.id === term || item.acronym?.toLowerCase() === term ? 0 :
+    const name = item.name.trim().toLowerCase();
+    const score = item.id === term || item.acronym?.trim().toLowerCase() === term ? 0 :
       name === term ? 1 : name.startsWith(term) ? 2 : name.includes(term) ? 3 : Infinity;
-    if (score < Infinity) matches.push({ item, score });
+    if (score <= (exact ? 1 : 3)) matches.push({ item, score });
   }
   matches.sort((a, b) => a.score - b.score || a.item.name.localeCompare(b.item.name));
   return {
@@ -76,10 +76,10 @@ export async function findItems({ query, limit, kind }) {
   };
 }
 
-export async function itemStats(item) {
-  const [feed, utility, [native], listing, dailySales] = await Promise.all([
+export async function itemStats(item, detail = market.readDetails([item]).then(([row]) => row)) {
+  const [feed, utility, native, listing, dailySales] = await Promise.all([
     market.readItemFeed(), item.kind === "asset" ? readUtility() : null,
-    market.readDetails([item]), market.readBestListing(item), market.readDailySales(item),
+    detail, market.readBestListing(item), market.readDailySales(item),
   ]);
   const row = feed?.get(keyOf(item));
   const utilityRow = utility?.items?.get(item.id);
@@ -102,9 +102,15 @@ export async function itemStats(item) {
       checkedAt: native.checkedAt,
     }, !!native),
     robloxBestPrice: listing.status === "unavailable"
-      ? unavailable(listing.source, listing.httpStatus)
+      ? unavailable(listing.source ?? (item.kind === "bundle" ? `https://catalog.roblox.com/v1/bundles/${item.id}/details`
+        : `https://economy.roblox.com/v2/assets/${item.id}/details`), listing.httpStatus)
       : { ...observed(listing.source, listing.checkedAt), price: listing.price },
   };
+}
+
+export function itemStatsBatch(items) {
+  const details = market.readDetails(items);
+  return items.map((item, index) => itemStats(item, details.then((rows) => rows[index])));
 }
 
 function readChanges(item, source) {
