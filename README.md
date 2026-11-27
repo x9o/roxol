@@ -1,4 +1,8 @@
-# Roxol
+<p align="center">
+  <img src="extension/assets/roxol-128.png" alt="Roxol icon" width="96" height="96">
+</p>
+
+<h1 align="center">Roxol</h1>
 
 Roxol helps you research Roblox Limiteds and compare trades. The Chrome and Edge extension adds market data to Roblox. The Roxol MCP connector brings that data into ChatGPT, and the Roxol Trade Analysis skill uses it to assess offers and completed trades.
 
@@ -86,6 +90,11 @@ The bundled **Roxol Trade Analysis** skill assesses a trade screenshot or writte
 
 - [MCP server setup and tools](tools/mcp/README.md)
 - [Headless Edge verification for contributors](AGENTS.md#browser-verification-and-screenshots)
-- [License for the vendored Nevos item and resale helpers](extension/vendor/nevos/LICENSE)
 
-Developed by **xo1o** on Discord, **r8rar** on Roblox, and [**x9o** on GitHub](https://github.com/x9o).
+## Credits
+
+Developed by **xolo** ([@x9o on GitHub](https://github.com/x9o), **@xo1o** on Discord, and **@r8rar** on Roblox).
+
+## Open-source policy
+
+Roxol is free and open source. Anyone can use Roxol and reuse its original code for free. The vendored Nevos helpers have their own license. [Nevos license](extension/vendor/nevos/LICENSE)
