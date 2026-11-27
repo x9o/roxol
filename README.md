@@ -11,9 +11,9 @@ Roxol helps you research Roblox Limiteds and compare trades. The Chrome and Edge
 3. Select **Load unpacked** and choose the repository's `extension` folder, the one containing `manifest.json`.
 4. Open or refresh a Roblox Marketplace listing. Sign in to Roblox for **Trades**, or open Roxol from the browser toolbar and select **Open Trades**.
 
-The toolbar popup shows your Roblox sign-in status and lets you toggle item stats, sales history, overpay estimates, trade comparisons, and other enhancements. Settings are saved in your browser profile and apply to open Roblox tabs as you change them.
+The toolbar popup shows your Roblox sign-in status and lets you toggle item stats, sales history, trade comparisons, and other enhancements. Settings are saved in your browser profile and apply to open Roblox tabs as you change them.
 
-> **Screenshot placeholder — Extension popup.** Show the Roblox sign-in status, **Open Trades**, and the feature switches.
+![Roxol extension popup with Roblox sign-in status, Open Trades, and feature switches](docs/screenshots/extension-popup.png)
 
 ## Marketplace
 
@@ -22,14 +22,11 @@ Open a Limited in Roblox Marketplace to check its price, recent sales, and obser
 - **Item metrics.** Supported Marketplace cards and item or bundle pages show **RAP** (Recent Average Price), Rolimon's assigned **Value** or a labeled fallback, and demand or average daily sales where available. Look for trend, rare, and projected indicators. **Might raise** and **Might drop** are Roxol estimates based on current RAP thresholds. On the listing, compare Roblox's **Best Price** with RAP and assigned Value when available.
 - **Sales history.** Hover over or focus **Sales history** for a preview, or select it to open the full viewer. Inspect tracked sale dates, estimated sale prices, and RAP before and after each sale. The viewer compares medians for the last 10 and 30 tracked sales with Value and Best Price, and shows Roblox daily resale prices and volume where available.
 
-> **Screenshot placeholder — Marketplace listing.** Show the item name, Best Price comparison, Value and demand, and the open sales preview with a sale point selected.
+![Silver King of the Night Marketplace listing with Best Price comparisons, Value, demand, and the recent sales preview](docs/screenshots/marketplace-sales-preview.png)
 
 - **View trades.** On supported Limited asset listings, select **View trades** to browse RoUtility's observed exchanges. Compare both sides at current Rolimon's Value, with RAP as a fallback. Expand **Valuation details** for the values, quantities, serials, and observation times RoUtility recorded where available. **Export viewed trades** saves the pages you've opened as JSON.
-- **7-day overpay.** Switch between **One-for-one** and **One-for-many** to see what the current RoUtility sample suggests you'd give or get in item value. Open **Estimate details** for the median, sample size, confidence, and exclusions. The estimate uses current Rolimon's Value or RAP and needs at least 10 qualifying records. RoUtility tracks ownership transfers, so trade completion and side payments can be unknown.
 
 > **Screenshot placeholder — Observed trades.** Show the **View trades** dialog with two item baskets and expanded **Valuation details**.
-
-> **Screenshot placeholder — 7-day overpay.** Show the panel with a trade type selected and **Estimate details** expanded.
 
 Supported Roblox profiles and inventories also show RAP and Value totals for loaded copies, a paginated item breakdown, serials where available, and RoliBadges.
 
@@ -62,7 +59,9 @@ Roxol's Model Context Protocol (MCP) server gives ChatGPT live market lookups fr
 3. In a ChatGPT workspace with custom MCP support, add a custom MCP server named **Roxol**, use the printed URL, and choose **No authentication**. [Connection settings](tools/mcp/README.md#4-connect-in-chatgpt)
 4. Select **@Roxol** in a chat and ask for the current stats for **Black Iron Antlers**. For live Nevos proofs, configure a Nevos client token on the server. [MCP setup and tool reference](tools/mcp/README.md) · [Nevos proof setup](tools/mcp/README.md#trade-proofs)
 
-> **Screenshot placeholder — Roxol in ChatGPT.** Show **@Roxol** answering a Limited lookup with RAP, Value, and source links.
+![Roxol in ChatGPT showing the Silver King of the Night market snapshot](docs/screenshots/mcp-item-snapshot.png)
+
+![The same Roxol lookup showing tracked sales, Rolimon's Value changes, and source links](docs/screenshots/mcp-market-history.png)
 
 ## Roxol Trade Analysis skill
 
@@ -73,7 +72,7 @@ The bundled **Roxol Trade Analysis** skill uses the MCP connector to assess a tr
 3. Make **@Roxol** available in the chat. Attach a trade screenshot or describe what you give, what you receive, and how much Robux is on each side. Include the date for a completed trade if you know it.
 4. Ask, “Was this trade a win, fair, or a loss?” [Skill source](skills/roxol-trade-analysis/SKILL.md)
 
-> **Screenshot placeholder — Trade Analysis result.** Show the uploaded trade screenshot alongside the verdict, confidence, and side-by-side breakdown with fee-adjusted totals.
+![Roxol Trade Analysis showing a Fair verdict for an 8-Bit Royal Crown downgrade, with confidence, fee-adjusted totals, and comparable trades](docs/screenshots/trade-analysis-verdict.png)
 
 ## Planned features
 
