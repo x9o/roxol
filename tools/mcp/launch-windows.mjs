@@ -1,17 +1,18 @@
 import { once } from "node:events";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:net";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
+import { parseEnv } from "node:util";
 
 const host = "127.0.0.1";
-const port = Number(process.env.PORT ?? 8788);
 const shutdown = new AbortController();
 const { signal } = shutdown;
 const processes = [];
 let stopping = false;
 let tunnelLog = "";
+let ngrokHost;
 
 function stop() {
   stopping = true;
@@ -72,12 +73,19 @@ async function initialize(url) {
 }
 
 try {
+  const envFile = path.join(import.meta.dirname, ".env");
+  const settings = existsSync(envFile) ? parseEnv(readFileSync(envFile, "utf8")) : {};
+  ngrokHost = (process.env.ROXOL_NGROK_HOST ?? settings.ROXOL_NGROK_HOST)?.trim();
+  if (ngrokHost && !/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(ngrokHost)) {
+    throw new Error("Set ROXOL_NGROK_HOST to the assigned ngrok hostname without https:// or /mcp.");
+  }
+  const port = Number(process.env.PORT ?? (ngrokHost ? settings.PORT : undefined) ?? 8788);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Set PORT to a number from 1 to 65535.");
   if (!existsSync(path.join(import.meta.dirname, "node_modules", "@modelcontextprotocol", "sdk"))) {
     throw new Error("Install the MCP dependencies with npm.cmd ci --prefix tools/mcp.");
   }
-  const cloudflared = findCloudflared();
-  if (!cloudflared) throw new Error("cloudflared.exe was not found. See the Windows launcher guide.");
+  const tunnelProgram = ngrokHost ? "ngrok.exe" : findCloudflared();
+  if (!tunnelProgram) throw new Error("cloudflared.exe was not found. See the Windows launcher guide.");
 
   const portCheck = createServer().listen(port, host);
   try {
@@ -88,8 +96,13 @@ try {
   }
   await new Promise((resolve) => portCheck.close(resolve));
 
-  console.log("Starting the Cloudflare Quick Tunnel...");
-  const tunnel = start("Cloudflare", cloudflared, ["tunnel", "--url", `http://${host}:${port}`, "--protocol", "http2"], {
+  const localUrl = `http://${host}:${port}`;
+  const tunnelName = ngrokHost ? "ngrok" : "Cloudflare";
+  const tunnelArgs = ngrokHost
+    ? ["http", localUrl, "--url", `https://${ngrokHost}`, "--log", "stdout"]
+    : ["tunnel", "--url", localUrl, "--protocol", "http2"];
+  console.log(ngrokHost ? "Starting ngrok on the configured hostname..." : "Starting the Cloudflare Quick Tunnel...");
+  const tunnel = start(tunnelName, tunnelProgram, tunnelArgs, {
     stdio: ["ignore", "pipe", "pipe"],
   });
   const tunnelAddress = /https:\/\/[a-z0-9-]+\.trycloudflare\.com\b/i;
@@ -99,16 +112,19 @@ try {
       tunnelLog = (tunnelLog + chunk).slice(-6000);
     });
   }
-  const publicUrl = await waitFor(() => tunnelLog.match(tunnelAddress)?.[0], "a Cloudflare URL", 30_000);
+  const publicUrl = ngrokHost ? `https://${ngrokHost}` :
+    await waitFor(() => tunnelLog.match(tunnelAddress)?.[0], "a Cloudflare URL", 30_000);
 
   start("Roxol", process.execPath, ["server.mjs"], {
     env: { ...process.env, PORT: String(port), ROXOL_MCP_BIND: host, ROXOL_MCP_PUBLIC_HOST: new URL(publicUrl).hostname },
     stdio: ["ignore", "inherit", "inherit"],
   });
   const mcpUrl = `${publicUrl}/mcp`;
-  await waitFor(() => initialize(`http://${host}:${port}/mcp`), "Roxol to answer locally", 10_000);
-  await waitFor(() => tunnelLog.includes("Registered tunnel connection"), "Cloudflare to connect", 30_000);
-  console.log(`\nChatGPT MCP URL\n${mcpUrl}\n\nKeep this window open. Press Ctrl+C to stop Roxol and Cloudflare.`);
+  await waitFor(() => initialize(`${localUrl}/mcp`), "Roxol to answer locally", 10_000);
+  if (!ngrokHost) {
+    await waitFor(() => tunnelLog.includes("Registered tunnel connection"), "Cloudflare to connect", 30_000);
+  }
+  console.log(`\nChatGPT MCP URL\n${mcpUrl}\n\nKeep this window open. Press Ctrl+C to stop Roxol and ${tunnelName}.`);
   try {
     await waitFor(() => initialize(mcpUrl), "Roxol to answer through Cloudflare", 10_000);
     console.log("Public MCP check passed.");
@@ -121,7 +137,9 @@ try {
 } catch (error) {
   if (!stopping) {
     console.error((signal.reason ?? error).message);
-    if (tunnelLog) console.error(tunnelLog.trim());
+    const ngrokError = tunnelLog.match(/\bERR_NGROK_\d+\b/)?.[0];
+    if (ngrokHost && ngrokError) console.error(`ngrok reported ${ngrokError}. Check the Windows launcher guide.`);
+    if (!ngrokHost && tunnelLog) console.error(tunnelLog.trim());
     process.exitCode = 1;
   }
 } finally {

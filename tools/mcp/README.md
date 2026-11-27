@@ -4,7 +4,7 @@ Roxol serves live public limited-item data through a stateless Streamable HTTP e
 
 ## Windows quick start
 
-You need Node.js 22 or newer, a local copy of Roxol, and access to **Add custom MCP server** in ChatGPT. After installing the dependencies, use the [double-click Windows launcher](WINDOWS-LAUNCHER.md) to start Roxol and Cloudflare together. The manual setup below uses two PowerShell windows. Your PC must stay on, awake, and online while you use Roxol. You can lock the screen.
+You need Node.js 22 or newer, a local copy of Roxol, and access to **Add custom MCP server** in ChatGPT. After installing the dependencies, use the [double-click Windows launcher](WINDOWS-LAUNCHER.md) to start Roxol with a fixed ngrok URL or a temporary Cloudflare Quick Tunnel. The manual Cloudflare setup below uses two PowerShell windows. Your PC must stay on, awake, and online while you use Roxol. You can lock the screen.
 
 ### 1. Install once
 
