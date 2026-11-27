@@ -1,91 +1,88 @@
 # Roxol
 
-Roxol is a Chrome and Edge extension for Roblox limited items and trading. It uses live data from Roblox, Rolimon's, and RoUtility.
+Roxol helps you research Roblox Limiteds and compare trades. The Chrome and Edge extension adds market data to Roblox. The Roxol MCP connector brings that data into ChatGPT, and the Roxol Trade Analysis skill uses it to assess offers and completed trades.
 
-Developed by:
-Discord @xo1o
-Roblox @r8rar
-Github @x9o
+[Install the extension](#install-the-extension) · [Marketplace](#marketplace) · [Trades](#trades) · [Connect Roxol MCP](#connect-roxol-mcp) · [Trade Analysis skill](#roxol-trade-analysis-skill)
 
-## Current features
+## Install the extension
 
-- **Item insights** on supported Marketplace cards, item and bundle detail pages, and inventory cards. See Recent Average Price (RAP), Rolimon's assigned value or a labeled fallback, demand or average daily sales, published trend, and rare or projected flags where available. **Might raise** and **Might drop** compare the current RAP snapshot with value-tier thresholds. Detail pages compare Roblox's Best Price with RAP and assigned value.
-- **Sales history** with an interactive preview and a full viewer. See tracked sale dates, estimated prices, RAP before and after each sale, how often sales exceeded pre-sale RAP, and how the median prices for the last 10 and 30 tracked sales compare with assigned value and Best Price. The full viewer also includes Roblox's daily resale prices and volume where available.
-- **Profiles and inventories** with RAP and value totals for loaded copies, a paginated breakdown, serial numbers where available, and RoliBadges. Eligible profiles can show a **Trade Items** shortcut in narrow layouts.
-- **Trade comparisons** on selected trades and send and counter forms. Each offer shows its Rolimon's total and average item demand below the native total, which is labeled `(RAP)`. The Rolimon's total uses the same item fallbacks and Robux amounts as the value comparison. Limited-item cards show Roblox RAP, Rolimon's value or a labeled RAP fallback, demand or average daily sales, state, and sales history where available. Centered badges between the offers show signed RAP and value changes, with Robux and Rolimon's icons and green and red indicators for gains and losses.
-- **Trade list previews** on Inbound, Outbound, Completed, and Closed or Inactive. Each row shows what you give above what you receive, with a Robux icon for RAP and a Rolimon's icon for value. Wide green and red stripes mark gains and losses for each metric. Hover over either pair for its label and the two totals.
-- **Item trade history** from RoUtility. Select **View trades** on a Roblox Marketplace asset page to compare item baskets, current Rolimon's totals, and overpay side by side. Expand a record for RoUtility's observation details, RAP, and Value. A local report resolves historical Rolimon's valuations and gives per-item swap, upgrade, and downgrade overpay statistics for exported trades.
-- **Reference links** to Rolimon's item, bundle, sales, and player pages. Trade offers and the inventory picker show an external link beside each item's Rolimon's value.
-- **Toolbar popup and settings** with Roblox sign-in status, Trades tab detection, an **Open Trades** shortcut, and preferences grouped by feature.
-- **Market data MCP** for item lookup, statistics, market history, trade observations, and copy ownership history. `get_trade_context` combines both offers, nominal RAP and Value differences, recent sales, deduplicated proofs, and optional copy history. `get_trade_proofs` finds live Nevos posts by legacy face or mapped bundle ID. `get_trade_proof_image` returns an original screenshot using Roxol's existing Nevos connection. Optional server-side transcription calculates fee-adjusted W/L and indexes completed proofs by every item and its mapped face or bundle equivalent. [Windows launcher](tools/mcp/WINDOWS-LAUNCHER.md) · [MCP setup and proof screenshots](tools/mcp/README.md#trade-proofs)
-- **Roxol Trade Analysis skill** for assessing a Roblox Limiteds screenshot or described exchange in ChatGPT. Import the [skill ZIP](skills/roxol-trade-analysis.zip) and make the Roxol connector available in the chat. The skill uses market data and comparable exchanges to explain a Win, Fair, or Loss verdict and its confidence. [Skill source](skills/roxol-trade-analysis/SKILL.md)
+1. Download or clone this repository. If you download the ZIP from GitHub, extract it first.
+2. Open `chrome://extensions` in Chrome or `edge://extensions` in Edge and turn on **Developer mode**.
+3. Select **Load unpacked** and choose the repository's `extension` folder, the one containing `manifest.json`.
+4. Open or refresh a Roblox Marketplace listing. Sign in to Roblox for **Trades**, or open Roxol from the browser toolbar and select **Open Trades**.
+
+The toolbar popup shows your Roblox sign-in status and lets you toggle item stats, sales history, overpay estimates, trade comparisons, and other enhancements. Settings are saved in your browser profile and apply to open Roblox tabs as you change them.
+
+> **Screenshot placeholder — Extension popup.** Show the Roblox sign-in status, **Open Trades**, and the feature switches.
+
+## Marketplace
+
+Open a Limited in Roblox Marketplace to check its price, recent sales, and observed trades.
+
+- **Item metrics.** Supported Marketplace cards and item or bundle pages show **RAP** (Recent Average Price), Rolimon's assigned **Value** or a labeled fallback, and demand or average daily sales where available. Look for trend, rare, and projected indicators. **Might raise** and **Might drop** are Roxol estimates based on current RAP thresholds. On the listing, compare Roblox's **Best Price** with RAP and assigned Value when available.
+- **Sales history.** Hover over or focus **Sales history** for a preview, or select it to open the full viewer. Inspect tracked sale dates, estimated sale prices, and RAP before and after each sale. The viewer compares medians for the last 10 and 30 tracked sales with Value and Best Price, and shows Roblox daily resale prices and volume where available.
+
+> **Screenshot placeholder — Marketplace listing.** Show the item name, Best Price comparison, Value and demand, and the open sales preview with a sale point selected.
+
+- **View trades.** On supported Limited asset listings, select **View trades** to browse RoUtility's observed exchanges. Compare both sides at current Rolimon's Value, with RAP as a fallback. Expand **Valuation details** for the values, quantities, serials, and observation times RoUtility recorded where available. **Export viewed trades** saves the pages you've opened as JSON.
+- **7-day overpay.** Switch between **One-for-one** and **One-for-many** to see what the current RoUtility sample suggests you'd give or get in item value. Open **Estimate details** for the median, sample size, confidence, and exclusions. The estimate uses current Rolimon's Value or RAP and needs at least 10 qualifying records. RoUtility tracks ownership transfers, so trade completion and side payments can be unknown.
+
+> **Screenshot placeholder — Observed trades.** Show the **View trades** dialog with two item baskets and expanded **Valuation details**.
+
+> **Screenshot placeholder — 7-day overpay.** Show the panel with a trade type selected and **Estimate details** expanded.
+
+Supported Roblox profiles and inventories also show RAP and Value totals for loaded copies, a paginated item breakdown, serials where available, and RoliBadges.
+
+## Trades
+
+Sign in and open Roblox **Trades**. Roxol adds comparisons to the trade lists, the selected trade, and the send and counter forms.
+
+- **Scan the trade list.** In **Inbound**, **Outbound**, **Completed**, and **Closed** or **Inactive**, each trade preview puts what you give on top and what you receive below. The Robux icon marks RAP and the Rolimon's icon marks Value. Green and red indicators show gains and losses. Hover over either pair to read its totals.
+- **Compare both offers.** Open a trade or build an offer to see each side's RAP, Rolimon's Value, and average demand across rated copies. The badges between the offers show the signed RAP and Value differences. Roxol counts outgoing Robux in full and incoming Robux after the trade fee.
+- **Inspect individual items.** Trade and inventory-picker cards show RAP, Value or a labeled fallback, demand or average daily sales, and projected warnings where available. Open an item's sales history or follow its Rolimon's link to check the numbers behind the offer.
+
+> **Screenshot placeholder — Roblox Trades.** Show a selected trade with its list preview visible, both offers and their demand rows, and the signed RAP and Value badges between the offers.
+
+## Connect Roxol MCP
+
+Roxol's Model Context Protocol (MCP) server gives ChatGPT live market lookups from Roblox, Rolimon's, RoUtility, and Nevos where configured. It runs separately from the browser extension and uses public data. For trade comparisons, give it both offers and any Robux on each side. A private Roblox trade ID alone is insufficient.
+
+| What you can ask for | What Roxol can retrieve |
+| --- | --- |
+| “Look up Black Iron Antlers.” | Find a Limited by name, acronym, or ID and look up RAP, Value, demand, supply, and Best Price where available. |
+| “Show recent resale activity for this item.” | Rolimon's tracked sales and Value changes, plus Roblox daily resale prices and volume. |
+| “Compare these two offers.” | A trade summary with fee-adjusted RAP and Value differences, recent market activity, and related proof posts where available. |
+| “Show me trade proofs for SKOTN.” | Nevos posts with original captions and attachments. Roxol can return an original screenshot, and can optionally transcribe and index screenshots with server-side vision configured. |
+| “Check this copy's ownership history.” | RoUtility's tracked ownership changes for a UAID or collectible instance UUID. RoUtility also provides item-level transfer observations. |
+
+### Get started on Windows
+
+1. Install **Node.js 22 or later**. From the repository folder, run `npm.cmd ci --prefix tools/mcp`.
+2. Set up Cloudflare Quick Tunnel or ngrok and double-click **start-roxol.bat**. Leave the launcher running and copy the HTTPS URL ending in `/mcp`. A Cloudflare Quick Tunnel gets a new URL when restarted. [Windows launcher guide](tools/mcp/WINDOWS-LAUNCHER.md)
+3. In a ChatGPT workspace with custom MCP support, add a custom MCP server named **Roxol**, use the printed URL, and choose **No authentication**. [Connection settings](tools/mcp/README.md#4-connect-in-chatgpt)
+4. Select **@Roxol** in a chat and ask for the current stats for **Black Iron Antlers**. For live Nevos proofs, configure a Nevos client token on the server. [MCP setup and tool reference](tools/mcp/README.md) · [Nevos proof setup](tools/mcp/README.md#trade-proofs)
+
+> **Screenshot placeholder — Roxol in ChatGPT.** Show **@Roxol** answering a Limited lookup with RAP, Value, and source links.
+
+## Roxol Trade Analysis skill
+
+The bundled **Roxol Trade Analysis** skill uses the MCP connector to assess a trade screenshot or a written offer. It works from your perspective, compares RAP and Value after fees, and weighs demand, recent sales, and comparable exchanges. It explains a **Win**, **Fair**, or **Loss** verdict and its confidence, or leaves the verdict open when important details are missing.
+
+1. Download the [Roxol Trade Analysis skill ZIP](skills/roxol-trade-analysis.zip).
+2. In a ChatGPT workspace with skill uploads enabled, open **Plugins → Skills → Add → Upload from your computer** and upload the ZIP.
+3. Make **@Roxol** available in the chat. Attach a trade screenshot or describe what you give, what you receive, and how much Robux is on each side. Include the date for a completed trade if you know it.
+4. Ask, “Was this trade a win, fair, or a loss?” [Skill source](skills/roxol-trade-analysis/SKILL.md)
+
+> **Screenshot placeholder — Trade Analysis result.** Show the uploaded trade screenshot alongside the verdict, confidence, and side-by-side breakdown with fee-adjusted totals.
 
 ## Planned features
 
-- **Expanded trade analysis** with partner inventory value when available and gross and net Robux after Roblox fees.
-- **Trade navigation and search** with a **Send** shortcut beside **Counter**, links to Rolimon's item and player pages, and copy-specific ownership history when available. Search both inventories by item name or acronym, filter by demand, hold status, or serial where supported, and select the exact copy.
-- **Pending-trade inventory checks** for both sides, with per-copy ownership and tradability status, a timestamp, and a **Check again** action.
-- **Desktop trade alerts and settings** with separate opt-ins for inbound, declined, and completed trades, click-through to the relevant trade, a test notification, and an option to hide RAP deltas separately.
-- **Per-item USD estimates** from RoUtility where available, with a separate optional estimate using a user-entered rate and live Rolimon's value.
-- **Mass Trade Sender** with offer selection, manual recipient entry, a review queue, progress tracking, and native trade forms for manual sending. Owner discovery is planned once the data is verified.
-- **Marketplace overpay estimates** are planned to use Nevos trade proofs through the same integration as Roxol MCP's `get_trade_proofs`. [Roxol MCP trade proof integration](tools/mcp/README.md#trade-proofs)
-- **Expanded market data exports** with reseller depth, resale activity, supply, and trade advertisements. Proof lookup can ship independently. See the [market data acquisition plan](MARKET_DATA_PLAN.md).
+- Marketplace overpay estimates based on Nevos trade proof data, plus expanded trade search, inventory checks, and alerts. [Trade feature plans](TRADE_UI_PLAN.md)
 
-**Ideas under consideration** include a **Might drop** forecast that tracks sustained pressure below a value threshold, plus buy, sell, and trade calculators that account for volume, liquidity, outliers, and sparse or stale data.
+## Project links
 
-## Load locally
+- [MCP server setup and tools](tools/mcp/README.md)
+- [Headless Edge verification for contributors](AGENTS.md#browser-verification-and-screenshots)
+- [License for the vendored Nevos item and resale helpers](extension/vendor/nevos/LICENSE)
 
-Enable Developer mode at `chrome://extensions` or `edge://extensions`, then select **Load unpacked** and choose the `extension` folder.
-
-The limited-card **Copy ID** control is disabled while its implementation is kept for future work.
-
-Roxol reuses item and resale helpers from Nevos. [Nevos source license](extension/vendor/nevos/LICENSE)
-
-## Popup preferences
-
-Open Roxol from the toolbar or from the extension's options page. Preferences are saved in the current browser profile and apply to open Roblox tabs as you change them. Features start enabled. **Auto** follows the Roblox theme for in-page Roxol controls and the browser theme for the popup. **Light** and **Dark** apply to Roxol's controls and surfaces.
-
-| Group | Controls |
-| --- | --- |
-| General | **Enable Roxol** controls all in-page enhancements, including profile and inventory panels. The popup still shows Roblox account status and the **Open Trades** shortcut. |
-| Item pages | **Item value** controls value rows and Best Price comparisons. **Demand and trend indicators** controls demand or daily sales, trend, and related item state badges. **Sales history** controls the preview and full viewer on Marketplace and inventory cards and detail pages. |
-| Trade pages | **Value and RAP comparisons** controls offer totals, offer demand, deltas, and Roblox trade-list previews. **Item statistics** controls trade and picker card figures, demand and trend, and sales previews. **Projected warnings** controls Rolimon's projected badge independently. |
-| Trade history | From Marketplace **View trades**, **Enhanced trade cards** controls the thumbnail layout. **Additional statistics** controls current valuations, basket totals, overpay, and valuation details. The compact item list and JSON export remain available. |
-
-To verify the preferences, leave a Marketplace listing or a trade open while changing its switches in the toolbar popup or extension options. Check that each corresponding feature updates, then reopen the popup to confirm the settings were saved. In the Marketplace trade history viewer, toggle the card layout and statistics while viewing a page. [Edge CDP verification workflow](AGENTS.md)
-
-## Trade list previews
-
-Open Roblox **Trades** while signed in and switch among Inbound, Outbound, Completed, and Closed or Inactive. Compare a row with its selected trade and check that the upper figures are your offer and the lower figures are what you receive. The previews use the trade's Roblox RAP when available and the current item snapshot as a fallback. The value pair uses Rolimon's assigned values or Roxol's usual item fallbacks. Both pairs include any Robux you give and count incoming Robux after the trade fee. A dash marks an unavailable total. Check that switching rows or tabs keeps the figures attached to the right trade. [Edge CDP verification workflow](AGENTS.md)
-
-## Trade offer demand
-
-The **Demand** row on each offer averages Rolimon's 1–5 ratings, counting every rated copy equally. The score displays to one decimal place beside a five-bar icon. The average excludes unrated copies and Robux. Hover over the row for rating coverage. A dash marks offers with zero rated copies.
-
-To verify it, add copies rated 2 and 5 to one side of a send or counter form and check for `3.5/5.0`. Add an unrated copy and check that the score stays at `3.5/5.0` while coverage changes to two of three copies. Change the other offer to verify that each side updates independently, then compare both rows on a selected trade. [Edge CDP verification workflow](AGENTS.md)
-
-## Resale activity badges
-
-Rated items show Rolimon's demand as `1` Terrible, `2` Low, `3` Normal, `4` High, or `5` Amazing. Card badges retain their tier colors. Hover over or focus a card badge to read the tier name. For unrated items, Roxol uses the **Avg Daily Sales** figure from the public Rolimon's item or bundle page when available. Thumbnail badges abbreviate sales per day as `S/D`. Hover over or focus the badge to see the full figure and an explanation of the resale activity metric. A published zero displays as `0.00 S/D`. An unrated item with a Rolimon's entry and no available sales figure shows a neutral `0` on its card. The extension's background worker shares lookups across tabs, caches page results for five minutes, and caches transient failures for 20 seconds.
-
-To verify the demand badge, hover over a rated limited item's Marketplace card and compare the displayed number and tooltip with its Rolimon's tier. To verify the sales fallback, open Epic Egg (`4773569689`) in Marketplace and compare its badge with Rolimon's published figure. Check the same badge on an inventory or trade card that contains an unrated limited item. [Epic Egg on Rolimon’s](https://www.rolimons.com/item/4773569689)
-
-## RoUtility trade history
-
-The **View trades** button appears on limited Marketplace asset pages.
-
-Roxol requests public history from `routility.io` when you open or page through the viewer. Requests send the asset ID and page number without cookies. The viewer requests item thumbnails from Roblox in batches. Each basket sums quantities at current Rolimon’s Value per copy, falling back to current Rolimon’s RAP when there is no positive Value. The viewer shows OP as Side B minus Side A and divides by Side A for OP percentage. If either total is unavailable, the viewer labels the trade **Unpriced trade**. A basket worth more than twice the other is labelled **Severe imbalance**. Expand **Valuation details** to inspect RoUtility’s original RAP and Value, quantities, serials, and item observation times where available. RoUtility cannot see side payments.
-
-**Export viewed trades** downloads JSON for the pages visited since opening the viewer. It includes source page coverage and fetch times, deduplicated trade records, and both item baskets with quantities, available copy IDs, observation times, and RoUtility's RAP and `valueThen`. Missing fields are `null`. An explicit zero remains zero in the export. The export omits participant identifiers and side payments.
-
-Run `node tools/overpay/resolve-trades.mjs trades.json valued-trades.json` with Node.js 22 or later and Edge on Windows. The report includes Rolimon's historical Value or dated RAP, per-item provenance, both basket totals, and signed item-only overpay. It also includes a separate calculation based on current snapshots. See the [historical valuation guide](tools/overpay/README.md#historical-valuation-of-routility-trades) for the cache, timing rules, and sample results.
-
-In the report, `itemOverpay.items` is keyed by asset ID and includes median OP, median percentage OP, quartiles, interquartile range, sample size, observation dates, and valuation and Robux coverage. Statistics cover the last 30 days and all observations in the export. Add `--completed pilot.json` to audit against reviewed Roblox completed-trade evidence, or run `node tools/overpay/validate-trades.mjs trades.json pilot.json audit.json` for the audit alone. [Method and live verification](tools/overpay/README.md#historical-overpay-statistics)
-
-To verify the integration, open Black Iron Antlers (asset `398674411`) in Edge with Roxol loaded. Select **View trades**, browse to the second page, and export the viewed trades. Check the two page entries and the two baskets per trade in the file. [Edge CDP verification workflow](AGENTS.md)
-
-## Contributing
-
-Build trading surfaces, including future proof checkers, inside `.roxol-market` to inherit Roblox's typography and Roxol's neutral theme tokens. Reuse `.roxol-stat-grid` and `.roxol-number` for comparable figures, `.roxol-table` for audit tables, `.roxol-basket-pair` and `.roxol-trade-basket` for opposing baskets, and `.roxol-segments`, `.roxol-disclosure`, `.roxol-progress-bar`, and `.roxol-loading-status` for controls and loading. Apply sign colors to numerical indicators through `data-direction`. [Shared marketplace stylesheet](extension/content/market.css)
-
-After each implementation, update the relevant README files and include those updates in the same commit. Summarize what changed in the commit subject and explain why in the commit body. Push to the corresponding GitHub branch and verify that its tip matches the local commit.
+Developed by **xo1o** on Discord, **r8rar** on Roblox, and [**x9o** on GitHub](https://github.com/x9o).
