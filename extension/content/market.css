@@ -284,6 +284,36 @@
   margin: 0;
 }
 
+.roxol-trade-total-demand {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: .875rem;
+  font-weight: 600;
+}
+
+.roxol-trade-demand-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 1em;
+  color: light-dark(#986200, #ffc36a);
+}
+
+.roxol-trade-demand-bars > span {
+  width: 2px;
+  height: 100%;
+  border-radius: 1px;
+  background: linear-gradient(to top, currentColor var(--roxol-demand-fill),
+    color-mix(in srgb, currentColor 30%, transparent) var(--roxol-demand-fill));
+}
+
+.roxol-trade-demand-bars > :nth-child(1) { height: 25%; }
+.roxol-trade-demand-bars > :nth-child(2) { height: 44%; }
+.roxol-trade-demand-bars > :nth-child(3) { height: 63%; }
+.roxol-trade-demand-bars > :nth-child(4) { height: 81%; }
+
 .roxol-market.roxol-trade-comparison {
   clear: both;
   display: flex;

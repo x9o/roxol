@@ -16,6 +16,7 @@
   const nativeSelector = `.trade-row-list, ${detailOffer}, ${requestOffer}, .trade-inventory-panel`;
   const signed = new Intl.NumberFormat(undefined, { signDisplay: "exceptZero" });
   const percent = new Intl.NumberFormat(undefined, { style: "percent", signDisplay: "exceptZero", maximumFractionDigits: 1 });
+  const demandFormat = new Intl.NumberFormat(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const itemRequests = new Map();
   const widgets = new Map();
   const offerTotals = new Map();
@@ -315,7 +316,21 @@
     for (const [row, state] of rowSummaries) renderRowSummary(row, state);
   }
 
-  function renderOfferTotals(offers, values) {
+  function offerDemand({ prices }) {
+    let sum = 0;
+    let rated = 0;
+    for (const { target } of prices) {
+      const meta = metadata(target);
+      if (meta?.pending) return null;
+      const rating = meta?.data?.rolimons?.demandRating;
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) continue;
+      sum += rating;
+      rated++;
+    }
+    return { average: rated ? sum / rated : null, rated, count: prices.length };
+  }
+
+  function renderOfferTotals(offers, values, demands) {
     const active = new Set();
     for (const [side, { offer }] of offers.entries()) {
       const rap = offer.querySelector(".robux-line:not(.ng-hide):not([ng-show]) .robux-line-amount .robux-line-value.text-robux-lg");
@@ -329,14 +344,34 @@
         icon.alt = "Rolimon's value";
         const number = ui.element("span", "");
         row.append(icon, number);
-        group.append(row);
-        widget = { group, row, number };
+        const demandRow = ui.element("span", "roxol-trade-total-demand");
+        const bars = ui.element("span", "roxol-trade-demand-bars");
+        bars.setAttribute("aria-hidden", "true");
+        for (let bar = 1; bar <= 5; bar++) bars.append(ui.element("span", ""));
+        const score = ui.element("span", "roxol-number");
+        demandRow.append(ui.element("span", "", "Demand"), bars, score);
+        group.append(row, demandRow);
+        widget = { group, row, number, demandRow, bars, score };
         offerTotals.set(rap, widget);
       }
       const value = values?.[side];
       widget.row.hidden = value == null;
       const formatted = value == null ? "" : ui.format(value);
       if (widget.number.textContent !== formatted) widget.number.textContent = formatted;
+      const demand = demands?.[side];
+      widget.demandRow.hidden = !demand;
+      if (demand) {
+        const { average, rated, count } = demand;
+        const score = average == null ? "—" : `${demandFormat.format(average)}/${demandFormat.format(5)}`;
+        const description = average == null ? "No items with a Rolimon’s demand rating" :
+          `Average Rolimon’s demand across ${rated} of ${count} item copies`;
+        if (widget.score.textContent !== score) widget.score.textContent = score;
+        widget.demandRow.title = description;
+        for (const [index, bar] of [...widget.bars.children].entries()) {
+          const fill = Math.min(1, Math.max(0, (average ?? 0) - index));
+          bar.style.setProperty("--roxol-demand-fill", `${fill * 100}%`);
+        }
+      }
       if (rap.nextElementSibling !== widget.group) rap.after(widget.group);
     }
     for (const [rap, { group }] of offerTotals) {
@@ -431,7 +466,7 @@
     renderCards(cards);
     if (preferences.tradeComparisons) {
       const values = offers?.map((offer) => total(offer, "Value"));
-      renderOfferTotals(next.offers, values);
+      renderOfferTotals(next.offers, values, offers?.map(offerDemand));
       if (offers) mountComparison(next, offers, values);
       else {
         comparison?.remove();
