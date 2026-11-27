@@ -39,13 +39,13 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
 
   register("find_items", "Find limited assets and bundles by Roblox ID, name, or acronym.",
     z.strictObject({ query, limit }), findItems);
-  register("search_limiteds", "Rank Roblox Limiteds by assigned Rolimon's Value, RAP, Roblox lowest resale ask, demand, 7- or 30-day sales volume, measured Value or RAP change, or discount to Value. Filter by price, demand, trend, gear, projected status, volume, change direction or minimum discount. Returns recent sale evidence and the inputs to each rank. Check scope and use nextCandidateOffset for broad history searches.",
+  register("search_limiteds", "Rank Roblox Limiteds by assigned Rolimon's Value, RAP, Roblox lowest resale ask, demand, 7- or 30-day sales volume, measured Value or RAP change, or discount to Value. Filter by price, demand, trend, gear, projected status, volume, change direction or minimum discount. Returns recent sale evidence and the inputs to each rank. Check scope.changeGaps for unevaluated items. If scope.retryAt is set, rerun the same page at or after that UTC time and use the refreshed result before advancing to nextCandidateOffset.",
     searchLimitedsInput, searchLimiteds);
   register("get_item_stats", "Get public item statistics by provider, including RAP, assigned Value, demand, supply and best price where available.",
     z.strictObject(target), itemStats);
   register("get_trade_context", "Gather market statistics, sales and trade proofs for an entire Roblox Limiteds trade, with optional tracked ownership for identified copies. Give and receive are from your perspective. Provide both baskets for nominal received-minus-given RAP and Value. A trade ID alone requires a signed-in Roblox session.",
     tradeContextInput, (args) => tradeContext(args, proofs, readLiveProofs, proofOptions), { includeText: false });
-  register("get_market_history", "Get one paginated series of Rolimon's tracked sales, assigned Value changes, or Roblox daily resale prices and volumes. Newest observations first.",
+  register("get_market_history", "Get one paginated series of Rolimon's tracked sales, assigned Value changes, or Roblox daily resale prices and volumes. Newest observations first. When Value history is rate_limited, retry at or after retryAt.",
     z.strictObject({ ...target, series: z.enum(["rolimons_sales", "rolimons_value_changes", "roblox_resale"]), page, limit }),
     ({ id, kind, ...args }) => history({ id, kind }, args));
   register("get_trade_observations", "Get a page of public RoUtility ownership-transfer observations. The feed can infer exchanges and cannot confirm completion or side payments.",

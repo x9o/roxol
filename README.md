@@ -72,6 +72,8 @@ Roxol's Model Context Protocol (MCP) server gives ChatGPT live market lookups fr
 
 In this example, `search_limiteds` found nine Limiteds under 50,000 Rolimon's Value that gained Value over seven days. All nine carried Rolimon's **Stable** trend tag at the time. ChatGPT ranked them by percentage gain and displayed demand, the lowest resale ask, and 30-day sales volume for comparison.
 
+Ranked change searches identify items whose change could not be calculated. If Rolimon's rate-limits Value history, Roxol reports when to retry the same page and reuses successful history lookups. [Ranked search coverage and pagination](tools/mcp/README.md#search-and-rank-limiteds)
+
 ![Roxol in ChatGPT ranking nine Limiteds under 50,000 Value by seven-day percentage gain](docs/screenshots/mcp-search-limiteds.png)
 
 ## Roxol Trade Analysis skill

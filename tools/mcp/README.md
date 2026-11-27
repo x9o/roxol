@@ -117,6 +117,8 @@ Pass any combination of filters to `search_limiteds`. The tool returns up to 10 
 
 When a search needs per-item history, Roxol evaluates up to 60 candidates per call after applying the snapshot filters. Volume searches evaluate higher demand first. Candidate ordering then uses higher Value or RAP, with names and IDs breaking ties. A `partial` result flags a subset or missing required upstream data. `scope` reports coverage and `matched` counts matches in the evaluated batch. For broader searches, reuse the same inputs with `scope.nextCandidateOffset` and compare `sortValue` across batches for a combined shortlist. Live snapshots can move between calls.
 
+`scope.changeGaps` identifies each candidate whose change could not be measured, with its source and reason. When Rolimon's Value history returns HTTP 429, Roxol pauses new Value-history requests for the upstream `Retry-After` interval and continues using cached histories. `scope.retryAt` gives the earliest UTC time to rerun the same search and `candidateOffset`. Use the refreshed results for that page before advancing to `nextCandidateOffset`. `get_market_history` also reports `rate_limited` and `retryAt` for affected Value history lookups.
+
 ### Whole-trade context
 
 `get_trade_context` returns its result in `structuredContent` with an empty `content` array.

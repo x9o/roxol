@@ -149,6 +149,22 @@ function valueHistory(item) {
   }));
 }
 
+function changeGap(item, data, delta, now) {
+  let reason = data.reason ?? data.status;
+  if (data.status === "ok") {
+    const latest = data.changes?.at(-1);
+    if (delta.basis === "value" && !latest) reason = "empty_history";
+    else if (latest?.time > now) reason = "future_history";
+    else if (latest && latest.after !== item.value) reason = "snapshot_mismatch";
+    else reason = "no_cutoff_value";
+  }
+  return {
+    id: item.id, kind: item.kind, name: item.name, reason, source: delta.source,
+    ...(data.httpStatus !== undefined ? { httpStatus: data.httpStatus } : {}),
+    ...(data.retryAt ? { retryAt: data.retryAt } : {}),
+  };
+}
+
 export async function searchLimiteds({
   price, demand, trend, excludeProjected, excludeGear, sales, change, minDiscountPercent,
   sort = defaultSort({ price, sales, change, minDiscountPercent }),
@@ -167,7 +183,8 @@ export async function searchLimiteds({
   const source = { source: rolimonsFeed, status: feed ? "ok" : "unavailable",
     checkedAt: feed ? iso(feed.values().next().value.checkedAt) : null };
   const scope = { catalogItems: feed?.size ?? 0, candidates: 0, evaluated: 0, candidateOffset,
-    nextCandidateOffset: null, missingCatalogData: 0, missingVolumeData: 0, missingChangeData: 0 };
+    nextCandidateOffset: null, missingCatalogData: 0, missingVolumeData: 0, missingChangeData: 0,
+    changeGaps: [], retryAt: null };
   const response = { asOf: iso(now), sort: { by: sort, order }, salesDays, scope, sources: { rolimons: source } };
   if (!feed) return { status: "unavailable", ...response, matched: 0, items: [] };
 
@@ -221,20 +238,22 @@ export async function searchLimiteds({
     ]);
     const delta = change ? measuredChange(change, item, changes ?? tracked, cutoff, now) : null;
     if (change && delta.difference === null) {
-      scope.missingChangeData++;
-      return null;
+      return { gap: changeGap(item, changes ?? tracked, delta, now) };
     }
     if ((change?.direction === "rising" && delta.difference <= 0) ||
         (change?.direction === "falling" && delta.difference >= 0)) return null;
     return { ...item, volume, changes, tracked, delta };
   }) : candidates;
+  scope.changeGaps = evaluated.flatMap((item) => item?.gap ? [item.gap] : []);
+  scope.missingChangeData = scope.changeGaps.length;
+  scope.retryAt = scope.changeGaps.reduce((latest, { retryAt }) => retryAt && (!latest || retryAt > latest) ? retryAt : latest, null);
 
   const score = (item) => ({
     value: item.value, rap: item.rap, lowest_ask: item.listing?.price, demand: item.demandRating || null,
     sales: item.volume?.copiesSold, change: item.delta?.difference, change_percent: item.delta?.percent,
     discount: item.discountPercent,
   })[sort];
-  const matches = evaluated.filter((item) => item && score(item) != null);
+  const matches = evaluated.filter((item) => item && !item.gap && score(item) != null);
   matches.sort((a, b) => (score(a) - score(b)) * (order === "asc" ? 1 : -1) || compareItems(a, b));
   const shortlist = matches.slice(0, limit);
   const details = shortlist.some((item) => !item.listing) ? await catalogRows(shortlist) : [];

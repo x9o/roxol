@@ -11,6 +11,7 @@ const catalog = "https://catalog.roblox.com/v1/catalog/items/details";
 const utilityCache = new Map();
 const changeCache = new Map();
 const copyHistoryCache = new Map();
+let valueChangesRetryAt = 0;
 
 const unavailable = (source, httpStatus) => ({ status: "unavailable", source, httpStatus });
 const observed = (source, checkedAt) => ({ status: "ok", source, checkedAt: new Date(checkedAt).toISOString() });
@@ -114,12 +115,26 @@ export function itemStatsBatch(items) {
 }
 
 function readChanges(item, source) {
-  return cached(changeCache, source) || remember(changeCache, source,
-    request(source, {}, "text").then(({ data, status }) => {
-      if (!data) return unavailable(source, status);
+  const known = cached(changeCache, source);
+  if (known) return known;
+  const rateLimited = (httpStatus) => ({
+    status: "rate_limited", source, httpStatus, retryAt: new Date(valueChangesRetryAt).toISOString(),
+  });
+  if (Date.now() < valueChangesRetryAt) return Promise.resolve(rateLimited());
+  return remember(changeCache, source,
+    request(source, {}, "text").then(({ data, status, retryAfter }) => {
+      if (status === 429) {
+        const now = Date.now();
+        const deadline = /^\d+$/.test(retryAfter ?? "") ? now + Number(retryAfter) * 1000 : Date.parse(retryAfter);
+        const retryAt = Number.isFinite(deadline) && deadline <= 8.64e15 ? Math.max(now + 1000, deadline) : now + 60_000;
+        valueChangesRetryAt = Math.max(valueChangesRetryAt, retryAt);
+        return rateLimited(status);
+      }
+      if (status !== 200) return unavailable(source, status);
       const history = valuation.parseHistory(data, item, undefined, source, undefined, { allowEmpty: true });
-      return history ? { ...observed(source, Date.now()), changes: history.changes } : unavailable(source, status);
-    }).catch(() => unavailable(source)), 120, itemTTL);
+      return history ? { ...observed(source, Date.now()), changes: history.changes } :
+        { ...unavailable(source, status), reason: "invalid_history" };
+    }).catch(() => unavailable(source)), 120, (result) => result.status === "rate_limited" ? 0 : itemTTL);
 }
 
 function pageOf(rows, page, limit) {

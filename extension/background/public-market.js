@@ -49,7 +49,8 @@ const RoxolPublicMarket = (() => {
             signal,
           });
           const data = response.ok ? await response[format]() : null;
-          return { status: response.status, data, csrf: response.headers.get("x-csrf-token") };
+          return { status: response.status, data, csrf: response.headers.get("x-csrf-token"),
+            ...(response.status === 429 ? { retryAfter: response.headers.get("retry-after") } : {}) };
         },
       });
       dispatchRequests();
