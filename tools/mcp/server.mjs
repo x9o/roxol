@@ -90,6 +90,11 @@ export function createRoxolServer({ proofs = null, publicHost, proofEnv = proces
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    process.loadEnvFile(new URL(".env", import.meta.url));
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
   const port = Number(process.env.PORT ?? 8787);
   const host = process.env.ROXOL_MCP_BIND ?? "127.0.0.1";
   const publicHost = process.env.ROXOL_MCP_PUBLIC_HOST;

@@ -54,6 +54,8 @@ npm.cmd start --prefix tools/mcp
 
 Wait for `Roxol MCP listening at http://127.0.0.1:8787/mcp` and leave this window open. If you get `EADDRINUSE`, choose another port and use it in both the tunnel command and `$env:PORT`.
 
+Roxol also reads an optional `tools/mcp/.env` file on startup, whether you use npm or run `server.mjs` directly. Use one `NAME=value` per line for settings such as `PORT`, `ROXOL_MCP_PUBLIC_HOST`, and `ROXOL_PROOFS_TOKEN`. Git ignores this file. Variables already set in the launching environment take precedence.
+
 ### 4. Connect in ChatGPT
 
 Open **Plugins → Add → Add custom MCP server** in ChatGPT. [OpenAI connection settings](https://developers.openai.com/api/docs/guides/custom-mcp-server)
@@ -92,7 +94,7 @@ The Node process and the extension run independent instances of the same public 
 
 Pass either `{"id":"439945661"}` or `{"query":"SKOTN"}` to `get_trade_proofs`. Text queries use the same ranked lookup as `find_items`. Provide `kind` to restrict a query to assets or bundles. The live lookup appends the resolved asset ID to the proof-search URL and sends a POST with an empty body and a 20-second timeout. The response includes the post ID, posting timestamp, text, and Nevos image references when available. `providerCount` reports Nevos's count, while `total` and `hasMore` describe pagination over the records Nevos returned. The posts contain user-reported evidence.
 
-Roxol reads the proof request settings at startup. Set `ROXOL_PROOFS_TOKEN` to a valid Nevos client token in the server's environment before starting it. In PowerShell, you can enter the token without echoing it or putting it in command history.
+Roxol reads the proof request settings at startup. Set `ROXOL_PROOFS_TOKEN` to a valid Nevos client token in the server's environment or `tools/mcp/.env`. For a PowerShell session, you can enter the token without echoing it or putting it in command history.
 
 ```powershell
 $env:ROXOL_PROOFS_TOKEN = [System.Net.NetworkCredential]::new('', (Read-Host 'Nevos client token' -AsSecureString)).Password
