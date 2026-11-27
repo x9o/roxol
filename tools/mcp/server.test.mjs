@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { loadProofs } from "./proofs.mjs";
+import { loadNevosToken, loadProofs } from "./proofs.mjs";
 import { createRoxolServer } from "./server.mjs";
 
 test("MCP discovers read-only tools and returns source data, cache hits, and proof coverage", async (t) => {
@@ -19,6 +19,10 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
     baskets: [[{ kind: "asset", id: assetId, quantity: 2 }], [{ kind: "asset", id: "9", quantity: 1 }]],
     robux: [0, null], hashes: ["f".repeat(64)],
   };
+  await writeFile(file, 'const nte_api_client_token = "fixture-token";');
+  const nevosToken = await loadNevosToken(undefined, file);
+  assert.equal(nevosToken, "fixture-token");
+  assert.equal(await loadNevosToken("override", file), "override");
   await writeFile(file, JSON.stringify({ pricedTrades: [{ ...entry, link: "https://example.com/private" }] }));
   await assert.rejects(loadProofs(file), /Invalid reviewed public proof/);
   await writeFile(file, JSON.stringify({ pricedTrades: [entry, { id: "skip", status: "conflict" }] }));
@@ -28,11 +32,32 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
 
   const originalFetch = globalThis.fetch;
   const urls = [];
+  let nevosFailure = null;
   t.mock.method(globalThis, "fetch", (input, init) => {
     const url = new URL(input instanceof Request ? input.url : input);
     if (url.hostname === "127.0.0.1") return originalFetch(input, init);
-    assert.equal(init.credentials, "omit");
     urls.push(url.href);
+    if (url.hostname === "nevos-extension.com") {
+      assert.equal(url.pathname, `/api/proofs/search/${assetId}`);
+      assert.equal(url.search, "");
+      assert.equal(init.method, "POST");
+      assert.equal(init.body, undefined);
+      assert.equal(init.redirect, "error");
+      assert.deepEqual(init.headers, {
+        Accept: "application/json", "X-NTE-Client": "fixture-token",
+        "From-Extension": "1", "Content-Type": "application/json",
+      });
+      const attachment = "https://nevos-extension.com/api/proofs/images/123456";
+      if (nevosFailure === "timeout") throw new DOMException("Timed out", "TimeoutError");
+      if (nevosFailure === "403") return new Response(null, { status: 403 });
+      if (nevosFailure === "429") return new Response(null, { status: 429, headers: { "Retry-After": "120" } });
+      if (nevosFailure === "decoy") return Response.json({ ok: true, source: "edge-cache" });
+      return Response.json({ item_id: Number(assetId), count: 4, results: [
+        { id: postId, content: "Trade screenshot", attachments: [attachment, "https://example.com/offsite"] },
+        { id: "1450000001000000000", timestamp: 1767000000000, attachments: [] },
+      ] });
+    }
+    assert.equal(init.credentials, "omit");
     if (url.hostname === "api.rolimons.com") return Response.json({ success: true, assets: {
       [assetId]: ["Black Iron Antlers", "BIA", 10000, 12000, 12000, 3, 2, -1, -1, -1],
     } });
@@ -68,7 +93,7 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
     throw new Error(`Unexpected fixture URL ${url.href}`);
   });
 
-  const server = createRoxolServer({ proofs }).listen(0, "127.0.0.1");
+  const server = createRoxolServer({ proofs, nevosToken }).listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   const endpoint = new URL(`http://127.0.0.1:${server.address().port}/mcp`);
   t.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
@@ -114,10 +139,33 @@ test("MCP discovers read-only tools and returns source data, cache hits, and pro
   assert.equal(trades.trades[0].sideA[0].valueThen, null);
   assert.equal(trades.trades[0].sideB[0].valueThen, 0);
   assert.equal("user_a_id" in trades.trades[0], false);
-  const { records } = await call("get_trade_proofs", { id: assetId });
-  assert.deepEqual(records[0].robux, [0, null]);
-  assert.equal(records[0].source, link);
-  assert.equal((await call("get_trade_proofs", { id: "999" })).total, 0);
+  const proofArgs = { id: assetId };
+  const live = await call("get_trade_proofs", { ...proofArgs, limit: 1 });
+  assert.equal(live.evidenceType, "nevos_proof_post");
+  assert.equal(live.providerCount, 4);
+  assert.equal(live.total, 2);
+  assert.equal(live.hasMore, true);
+  assert.equal(live.records[0].postId, "1450000001000000000");
+  const older = await call("get_trade_proofs", { ...proofArgs, limit: 1, page: 2 });
+  assert.equal(older.records[0].content, "Trade screenshot");
+  assert.deepEqual(older.records[0].attachments, ["https://nevos-extension.com/api/proofs/images/123456"]);
+  assert.equal((await call("get_trade_proofs", { ...proofArgs, kind: "bundle" })).nevos.status, "unsupported");
+
+  for (const [failure, reason, status] of [
+    ["decoy", "invalid_proof_response", 200], ["403", "http_error", 403],
+    ["timeout", "timeout", undefined], ["429", "rate_limited", 429],
+  ]) {
+    nevosFailure = failure;
+    const fallback = await call("get_trade_proofs", proofArgs);
+    assert.equal(fallback.evidenceType, "reviewed_screenshot");
+    assert.equal(fallback.nevos.reason, reason);
+    assert.equal(fallback.nevos.httpStatus, status);
+    assert.deepEqual(fallback.records[0].robux, [0, null]);
+    assert.equal(fallback.records[0].source, link);
+  }
+  const requestCount = urls.length;
+  assert.equal((await call("get_trade_proofs", proofArgs)).nevos.reason, "rate_limited");
+  assert.equal(urls.length, requestCount);
   assert.equal((await client.callTool({ name: "get_item_stats", arguments: { id: "https://example.com" } })).isError, true);
   assert.equal((await originalFetch(endpoint, { method: "POST", headers: { Origin: "https://example.com" } })).status, 403);
 });

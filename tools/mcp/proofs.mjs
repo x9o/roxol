@@ -21,6 +21,17 @@ const row = z.object({
   hashes: z.array(hash).min(1).max(20),
 });
 
+export async function loadNevosToken(token, source = new URL(
+  "../../nevos-trading-extension/extension/background/background.js", import.meta.url,
+)) {
+  if (token?.trim()) return token.trim();
+  const script = await readFile(source, "utf8").catch((error) => {
+    if (error.code === "ENOENT") return "";
+    throw error;
+  });
+  return script.match(/\bconst nte_api_client_token\s*=\s*(["'])([^"'\r\n]+)\1/)?.[2];
+}
+
 export async function loadProofs(file) {
   if (!file) return null;
   const document = JSON.parse(await readFile(file, "utf8"));
