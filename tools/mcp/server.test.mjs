@@ -276,6 +276,7 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   const parsed = await call("get_trade_proofs", { ...proofArgs, readScreenshots: true, limit: 1, page: 2 });
   const [screenshot] = parsed.records[0].screenshots;
   assert.equal(screenshot.status, "indexed");
+  assert.equal(screenshot.priceBasis, "screenshot");
   assert.equal(screenshot.baskets[0][0].quantity, 2);
   assert.deepEqual(screenshot.baskets[1].map(({ kind, id }) => [kind, id]), [["bundle", "12345"], ["asset", "10"]]);
   assert.equal(screenshot.baskets[1][1].serial, "3");
@@ -287,7 +288,8 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
     netRobux: [50, -86], creditedDifference: 56, netRap: [2050, -2086], netValue: [1050, -1086],
     netDisplayedPrice: [2050, -2086],
   });
-  for (const lookup of [{ id: "10" }, { id: "44444" }, { kind: "bundle", id: "12345" }]) {
+  for (const lookup of [{ id: "10" }, { id: "44444" }, { kind: "bundle", id: "12345" },
+    { id: "12345" }, { query: "12345" }]) {
     const result = await call("get_trade_proofs", lookup);
     assert.equal(result.nevos.reason, "empty_proof_response");
     assert.equal(result.total, 1);
@@ -401,16 +403,31 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   assert.equal((await originalFetch(endpoint, { method: "POST", headers: { Origin: "https://example.com" } })).status, 403);
 });
 
-test("proof Robux distinguishes gross offers, credited amounts, and unreadable amounts", () => {
+test("proof Robux uses separate screenshot item values and leaves unclear fee math unknown", () => {
+  const skotn = [[{ quantity: 1, value: 470000 }], [240000, 40000, 150000, 8000]
+    .map((value) => ({ quantity: 1, value }))];
+  const zero = { amount: 0, basis: "unknown" };
+  const proof = proofRobux(skotn, [zero, { amount: 35000, basis: "after_fee" }]);
+  assert.deepEqual(proof.robux[1], {
+    amount: 35000, basis: "after_fee", offered: 50000, credited: 35000, offeredInferred: true,
+  });
+  assert.deepEqual(proof.netValue, [3000, -18000]);
+  assert.deepEqual(proof.netRap, [null, null]);
+  assert.deepEqual(proof.netDisplayedPrice, [null, null]);
+  assert.deepEqual(proofRobux(skotn, [zero, { amount: 50000, basis: "offered" }]).netValue, proof.netValue);
+
   const baskets = [[{ quantity: 1, rap: 100 }], [{ quantity: 1, rap: 200 }]];
-  const result = proofRobux(baskets, [{ amount: 0, basis: "unknown" }, { amount: 70, basis: "after_fee" }]);
-  assert.deepEqual(result.netRobux, [70, null]);
-  assert.deepEqual(result.netRap, [170, null]);
+  const result = proofRobux(baskets, [zero, { amount: 1, basis: "after_fee" }]);
+  assert.deepEqual(result.netRobux, [1, null]);
+  assert.deepEqual(result.netRap, [101, null]);
   assert.deepEqual(result.netValue, [null, null]);
-  assert.equal(result.creditedDifference, 70);
+  assert.equal(result.creditedDifference, 1);
   const unknown = proofRobux(baskets, [{ amount: null, basis: "unknown" }, { amount: 10, basis: "unknown" }]);
   assert.deepEqual(unknown.netRobux, [null, null]);
   assert.equal(unknown.creditedDifference, null);
+  const combinedOnly = proofRobux([[{ quantity: 1 }], [{ quantity: 1 }]],
+    [zero, { amount: null, basis: "unknown" }], [{ value: 470000 }, { value: null }]);
+  assert.deepEqual(combinedOnly.netValue, [null, null]);
 });
 
 test("Nevos proof requests use configured URL and header overrides", async (t) => {

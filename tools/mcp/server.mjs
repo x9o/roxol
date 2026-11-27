@@ -25,7 +25,7 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
   const server = new McpServer({ name: "roxol-market-data", version: "1.0.0" }, {
     instructions: "Find item IDs with find_items. Source statuses and timestamps describe each provider independently. " +
       "RoUtility trades are ownership-transfer observations. Nevos proof posts are user-reported. " +
-      "Use get_trade_proofs with readScreenshots to transcribe and index both sides of proof attachments. " +
+      "Use get_trade_proofs with readScreenshots to transcribe and index both sides of proof attachments. Label proof W/L by its screenshot price field and leave any null fee-adjusted result unknown. " +
       "Prices and history use Robux unless a field explicitly names another currency.",
   });
 
@@ -60,6 +60,10 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
     async ({ id: itemId, query, kind, ...args }) => {
       const numericId = itemId ?? id.safeParse(query).data;
       let item = { id: numericId, kind: kind ?? "asset" };
+      if (numericId && !kind && proofOptions.screenshots?.byItem.has(`bundle:${numericId}`) &&
+          !proofOptions.screenshots.byItem.has(`asset:${numericId}`)) {
+        item.kind = "bundle";
+      }
       if (!numericId) {
         const search = await findItems({ query, kind, limit: 1 });
         [item] = search.items;

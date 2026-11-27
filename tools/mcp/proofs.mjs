@@ -186,13 +186,21 @@ export function createFaceAliases() {
     }).catch(() => null), 1, 30 * 60_000);
 }
 
-const received = (amount) => Math.round(amount * 0.7);
+const received = (amount) => Math.floor(amount / 10) * 7 + Math.round((amount % 10) * 7 / 10);
+
+function grossFromCredit(credited) {
+  const estimate = Math.round(credited / 0.7);
+  const matches = [estimate - 1, estimate, estimate + 1]
+    .filter((gross) => Number.isSafeInteger(gross) && gross > 0 && received(gross) === credited);
+  return matches.length === 1 ? matches[0] : null;
+}
 
 export function proofRobux(baskets, payments, itemTotals = []) {
   const robux = payments.map(({ amount, basis }) => {
-    const offered = amount === 0 || basis === "offered" ? amount : null;
+    const inferred = basis === "after_fee" && amount > 0 ? grossFromCredit(amount) : null;
+    const offered = amount === 0 || basis === "offered" ? amount : inferred;
     const credited = amount === 0 || basis === "after_fee" ? amount : offered === null ? null : received(offered);
-    return { amount, basis, offered, credited };
+    return { amount, basis, offered, credited, ...(inferred === null ? {} : { offeredInferred: true }) };
   });
   const subtract = (incoming, outgoing) => incoming == null || outgoing == null ? null : incoming - outgoing;
   const netRobux = robux.map((outgoing, side) => subtract(robux[1 - side].credited, outgoing.offered));
