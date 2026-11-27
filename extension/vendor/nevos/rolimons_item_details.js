@@ -292,4 +292,4 @@
     resolve_roblox_catalog_target,
     profile_url,
   };
-})(typeof globalThis !== "undefined" ? globalThis : self);
+})(typeof module !== "undefined" && module.exports ? module.exports : typeof globalThis !== "undefined" ? globalThis : self);

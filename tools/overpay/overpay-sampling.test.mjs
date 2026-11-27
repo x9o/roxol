@@ -107,7 +107,8 @@ test("partial pages do not replace a complete cache and cached rows still age ou
 test("Marketplace deduplicates requests, reuses saved samples after a worker restart and refreshes after two minutes", async () => {
   const scripts = await Promise.all([
     "shared/market_targets.js", "shared/trade-valuations.js", "shared/item-overpay.js", "shared/overpay-sampling.js",
-    "vendor/nevos/rolimons_item_details.js", "background/rolimons.js", "background/market.js",
+    "vendor/nevos/nte_sales_core.js", "vendor/nevos/rolimons_item_details.js", "background/rolimons.js",
+    "background/public-market.js", "background/market.js",
   ].map((file) => readFile(new URL(`../../extension/${file}`, import.meta.url), "utf8")));
   const saved = {};
   const urls = [];

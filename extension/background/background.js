@@ -1,7 +1,7 @@
 importScripts(
   "../shared/market_targets.js", "../shared/trades.js", "../vendor/nevos/nte_sales_core.js",
   "../shared/trade-valuations.js", "../shared/item-overpay.js", "../shared/overpay-sampling.js",
-  "../vendor/nevos/rolimons_item_details.js", "rolimons.js", "market.js",
+  "../vendor/nevos/rolimons_item_details.js", "rolimons.js", "public-market.js", "market.js",
 );
 
 const AUTHENTICATED_USER_URL = "https://users.roblox.com/v1/users/authenticated";

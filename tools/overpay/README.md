@@ -168,3 +168,5 @@ A review maps a Discord message ID to the screenshot findings. Use the attachmen
 ```
 
 If a post contains multiple completed trades, use an array of review entries for that message ID and give each entry its matching attachment hash. Use `robuxBasis` to record whether the screenshot shows an offered amount or an amount after the fee. Use `serial` for a visible serial number and `copyId` for an actual copy ID.
+
+To serve approved public evidence through Roxol's MCP, copy the shareable entries from `pilot.json` into a separate JSON export with a `pricedTrades` array. The MCP reads that file at startup and returns an allowlisted projection of each record. [Proof export configuration](../mcp/README.md#reviewed-public-proofs)

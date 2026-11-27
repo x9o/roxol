@@ -1,6 +1,9 @@
 const RoxolRolimons = (() => {
-  const { idOf, keyOf, amount } = RoxolTargets;
-  const { ROW_RAP, ROW_VALUE, get_item_demand, is_item_rare } = RolimonsItemDetails;
+  const commonJS = typeof module !== "undefined" && module.exports;
+  const targets = commonJS ? require("../shared/market_targets.js") : RoxolTargets;
+  const details = commonJS ? require("../vendor/nevos/rolimons_item_details.js").RolimonsItemDetails : RolimonsItemDetails;
+  const { idOf, keyOf, amount } = targets;
+  const { ROW_RAP, ROW_VALUE, get_item_demand, is_item_rare } = details;
   const demandLabels = ["Terrible", "Low", "Normal", "High", "Amazing"];
   const trendLabels = ["Lowering", "Unstable", "Stable", "Raising", "Fluctuating"];
   const valueTiers = [4000, 4500];
@@ -127,3 +130,5 @@ const RoxolRolimons = (() => {
 
   return { itemIndex, readDailySales, readSales };
 })();
+
+if (typeof module !== "undefined" && module.exports) module.exports = RoxolRolimons;

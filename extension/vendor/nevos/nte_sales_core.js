@@ -47,7 +47,7 @@
     );
   }
 
-  function normalize_points(payload) {
+  function normalize_points(payload, { preserveMissingVolume = false } = {}) {
     if (!payload) return [];
     let rows = [];
     let push = (arr) => {
@@ -64,8 +64,8 @@
       if (!Array.isArray(arr)) return;
       for (let row of arr) {
         let time = parse_time(row?.date ?? row?.timestamp ?? row?.time);
-        let count = parseInt(row?.value ?? row?.volume ?? row?.count ?? 0, 10);
-        if (Number.isFinite(time) && Number.isFinite(count) && count > 0)
+        let count = parseInt(row?.value ?? row?.volume ?? row?.count, 10);
+        if (Number.isFinite(time) && Number.isSafeInteger(count) && count >= 0)
           volume_by_time.set(time, count);
       }
     };
@@ -87,7 +87,7 @@
             10,
           ),
           time_ms,
-          volume: volume_by_time.get(time_ms) || 0,
+          volume: volume_by_time.get(time_ms) ?? (preserveMissingVolume ? null : 0),
         };
       })
       .filter(
@@ -190,4 +190,4 @@
     normalize_points,
     compute_summary,
   };
-})(typeof globalThis !== "undefined" ? globalThis : this);
+})(typeof module !== "undefined" && module.exports ? module.exports : typeof globalThis !== "undefined" ? globalThis : this);

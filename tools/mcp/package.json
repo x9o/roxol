@@ -1,0 +1,8 @@
+{
+  "name": "roxol-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "engines": { "node": ">=22" },
+  "scripts": { "start": "node server.mjs", "test": "node --test" },
+  "dependencies": { "@modelcontextprotocol/sdk": "1.32.2", "zod": "^4.0.0" }
+}

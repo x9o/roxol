@@ -73,3 +73,5 @@ const RoxolTargets = (() => {
 
   return { idOf, targetOf, routeOf, keyOf, robloxItemUrl, rolimonsSalesUrl, amount, copyIdOf, cardCopy, cardTarget };
 })();
+
+if (typeof module !== "undefined" && module.exports) module.exports = RoxolTargets;

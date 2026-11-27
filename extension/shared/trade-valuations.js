@@ -13,7 +13,7 @@ const RoxolTradeValuations = (() => {
     return time === null ? null : new Date(time).toISOString();
   }
 
-  function parseHistory(html, target, currentValue, source, trackedFrom) {
+  function parseHistory(html, target, currentValue, source, trackedFrom, { allowEmpty = false } = {}) {
     const match = /\bvar value_changes\s*=\s*(\[[^;]*\]);/.exec(html);
     if (!match) return null;
     let rows;
@@ -35,6 +35,9 @@ const RoxolTradeValuations = (() => {
       if (changes.some(({ time, before, after }) => time < trackedFrom ||
           ![before, after].every((value) => value === null || (Number.isSafeInteger(value) && value > 0)))) return null;
       if (!changes.length && currentValue === null) return { source, changes, unvaluedFrom: trackedFrom };
+    }
+    if (!profile && allowEmpty && !changes.length && (currentValue === undefined || currentValue === null)) {
+      return { source, changes };
     }
     if (!changes.length || changes.some((entry, i) => !Number.isSafeInteger(entry.time) ||
         entry.time <= 0 || entry.time > 8.64e15 ||
