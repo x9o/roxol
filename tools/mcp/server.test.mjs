@@ -12,6 +12,10 @@ import { createRoxolServer } from "./server.mjs";
 
 test("MCP discovers tools and returns source data, cache hits, and proof coverage", async (t) => {
   const assetId = "439945661";
+  const biaId = "398674411";
+  const biaName = "Black Iron Antlers";
+  const biaPostIds = Array.from({ length: 31 }, (_, index) => String(1450000000000000000n + BigInt(index)));
+  let biaResolvedById = false;
   const uaid = "9007199254740993";
   const collectibleInstanceId = "c90b0e8f-45ce-4cb9-9a4c-9f68cce9b3f9";
   const proofToken = "fixture-token";
@@ -78,7 +82,7 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
     }
     if (url.hostname === "nevos-extension.com") {
       const proofItem = url.pathname.split("/").at(-1);
-      assert.ok([assetId, "9", "10", "44444", "12345"].includes(proofItem));
+      assert.ok([assetId, biaId, encodeURIComponent(biaName), "9", "10", "44444", "12345"].includes(proofItem));
       assert.equal(url.search, "");
       assert.equal(init.method, "POST");
       assert.equal(init.body, undefined);
@@ -96,6 +100,11 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "none",
       });
+      if (proofItem === biaId || proofItem === encodeURIComponent(biaName)) {
+        if (proofItem === biaId && !biaResolvedById) return Response.json({ count: 0, results: [] });
+        const results = (proofItem === biaId ? biaPostIds.slice(-12) : biaPostIds).map((id) => ({ id }));
+        return Response.json({ item_id: biaId, count: results.length, results });
+      }
       if (nevosFailure === "timeout") throw new DOMException("Timed out", "TimeoutError");
       if (nevosFailure === "network") throw new TypeError("Fetch failed");
       if (nevosFailure === "blocked_route") {
@@ -119,6 +128,7 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
     }
     if (url.hostname === "api.rolimons.com") return Response.json({ success: true, assets: {
       [assetId]: ["Silver King of the Night ", "SKOTN", 10000, 12000, 12000, 3, 2, -1, -1, -1],
+      [biaId]: [biaName, "BIA", 10000, 12000, 12000, 3, 2, -1, -1],
       "9": ["Other Limited", "OL", 22000, -1, 22000, 3, 2, -1, -1, -1],
       "10": ["OL", "", 31000, 33000, 33000, 3, 2, -1, -1, -1],
     }, bundles: { "12345": ["Fixture Face", "", 14000, 15000, 15000, 3, 2, -1, -1, -1] } });
@@ -269,6 +279,27 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
     assert.equal(result.isError, true);
   }
   assert.equal(urls.length, callsBeforeInvalid);
+
+  const biaLookup = { query: "BIA", limit: 30 };
+  const biaSearches = () => urls.filter((url) => url.includes("nevos-extension.com/api/proofs/search/"));
+  const biaSearchById = `https://nevos-extension.com/api/proofs/search/${biaId}`;
+  const biaSearchByName = `https://nevos-extension.com/api/proofs/search/${encodeURIComponent(biaName)}`;
+  const biaFirst = await call("get_trade_proofs", biaLookup);
+  assert.deepEqual(biaSearches().slice(-2), [biaSearchById, biaSearchByName]);
+  assert.deepEqual(biaFirst.records.map(({ postId }) => postId), biaPostIds.slice(1).reverse());
+  assert.equal(biaFirst.providerCount, 31);
+  assert.equal(biaFirst.hasMore, true);
+  const biaSecond = await call("get_trade_proofs", { ...biaLookup, page: 2 });
+  assert.deepEqual(biaSecond.records.map(({ postId }) => postId), [biaPostIds[0]]);
+  assert.equal(biaSecond.hasMore, false);
+
+  biaResolvedById = true;
+  const biaSearchCount = biaSearches().length;
+  const biaLimited = await call("get_trade_proofs", biaLookup);
+  assert.deepEqual(biaSearches().slice(biaSearchCount), [biaSearchById]);
+  assert.equal(biaLimited.records.length, 12);
+  assert.equal(biaLimited.providerCount, 12);
+  assert.equal(biaLimited.hasMore, false);
 
   const proofArgs = { id: assetId };
   const live = await call("get_trade_proofs", { query: " SKOTN ", limit: 1 });

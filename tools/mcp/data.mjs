@@ -242,7 +242,7 @@ function pageOfProofs(records, page, limit) {
   return pageOf(Array.from(unique.values()), page, limit);
 }
 
-export async function tradeProofs(proofs, item, { page, limit, readScreenshots, screenshotOffset = 0, inferKind }, readLiveProofs,
+export async function tradeProofs(proofs, item, { page, limit, readScreenshots, screenshotOffset = 0, inferKind, itemName }, readLiveProofs,
   { readAliases, screenshots } = {}) {
   const needsAliases = inferKind || item.kind === "bundle" || proofs?.records.length || screenshots?.byItem.size;
   let aliases = needsAliases ? await readAliases?.() : null;
@@ -257,7 +257,7 @@ export async function tradeProofs(proofs, item, { page, limit, readScreenshots, 
   }
   let equivalents = aliases?.get(keyOf(item)) ?? [];
   const primary = item.kind === "bundle" && equivalents.length === 1 ? equivalents[0] : item;
-  let nevos = await readLiveProofs(primary);
+  let nevos = await readLiveProofs(primary, { itemName: primary === item ? itemName : undefined });
   if (nevos.status !== "ok") {
     if (!needsAliases) {
       aliases = await readAliases?.();
@@ -266,7 +266,7 @@ export async function tradeProofs(proofs, item, { page, limit, readScreenshots, 
     const bundle = item.kind === "bundle" && equivalents.length ? item :
       equivalents.find(({ kind }) => kind === "bundle");
     if (bundle) {
-      const fallback = await readLiveProofs(bundle, { allowBundle: true });
+      const fallback = await readLiveProofs(bundle, { allowBundle: true, itemName: bundle === item ? itemName : undefined });
       if (fallback.status === "ok") nevos = fallback;
     }
   }

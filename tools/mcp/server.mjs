@@ -69,7 +69,7 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
         if (!item) return { instanceId, query, status: search.status === "ok" ? "not_found" : search.status, sources: search.sources };
       }
       return { instanceId, ...await tradeProofs(proofs, { id: item.id, kind: item.kind },
-        { ...args, inferKind: Boolean(numericId && !kind) }, readLiveProofs, proofOptions) };
+        { ...args, inferKind: Boolean(numericId && !kind), itemName: item.name }, readLiveProofs, proofOptions) };
     }, { readOnly: false });
   server.registerTool("get_trade_proof_image", {
     description: "View one original trade proof screenshot using a Nevos attachment URL returned by get_trade_proofs. Returns the picture as MCP image content.",

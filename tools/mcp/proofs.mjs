@@ -67,9 +67,8 @@ export function createProofClient(env = process.env) {
   };
   let retryAt = 0;
 
-  async function readLiveProofs(item, { allowBundle = false } = {}) {
-    const source = `${baseUrl}/${item.id}`;
-    if (item.kind !== "asset" && !allowBundle) return { source, status: "unsupported" };
+  async function searchProofs(item, term) {
+    const source = `${baseUrl}/${encodeURIComponent(term)}`;
     if (!token) return { source, status: "unavailable", reason: "no_nevos_client_token" };
     if (retryAt > Date.now()) return { source, status: "unavailable", httpStatus: 429, reason: "rate_limited" };
 
@@ -104,7 +103,9 @@ export function createProofClient(env = process.env) {
           (data.item_id != null && data.item_id !== "" && targets.idOf(data.item_id) !== item.id)) {
         return unavailable("invalid_proof_response");
       }
-      if (!data.results.length) return unavailable("empty_proof_response");
+      if (!data.results.length) {
+        return { ...unavailable("empty_proof_response"), resolved: Boolean(data.item_id || data.item_name || data.acronym) };
+      }
 
       const records = data.results.flatMap((row) => {
         if (typeof row?.id !== "string" || !/^\d{17,20}$/.test(row.id)) return [];
@@ -123,6 +124,18 @@ export function createProofClient(env = process.env) {
       return unavailable(signal.aborted || error.name === "TimeoutError" ? "timeout" :
         error instanceof SyntaxError ? "invalid_proof_response" : "request_failed");
     }
+  }
+
+  async function readLiveProofs(item, { allowBundle = false, itemName } = {}) {
+    if (item.kind !== "asset" && !allowBundle) return { source: `${baseUrl}/${item.id}`, status: "unsupported" };
+    const { resolved, ...byId } = await searchProofs(item, item.id);
+    const name = itemName?.trim().replace(/\s+/g, " ").slice(0, 160);
+    const retryByName = byId.httpStatus === 404 || (!resolved && ["empty_proof_response", "invalid_proof_response",
+      "request_failed", "timeout"].includes(byId.reason));
+    if (!name || name === item.id || !retryByName) return byId;
+
+    const byName = await searchProofs(item, name);
+    return byName.status === "ok" ? byName : byId;
   }
 
   async function readImage(url) {
