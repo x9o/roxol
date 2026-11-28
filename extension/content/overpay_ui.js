@@ -17,14 +17,50 @@ const RoxolOverpay = (() => {
     return row;
   }
 
+  async function showProof(trade, label) {
+    const body = ui.showDialog(`Trade proof · ${label}`);
+    const images = element("div", "roxol-proof-images");
+    const status = element("p", "roxol-overpay-note", "Loading attachments…");
+    status.setAttribute("role", "status");
+    body.append(images, status, ui.link("Open original Discord post", trade.discordUrl, true));
+    let unavailable = 0;
+    for (const [index, url] of trade.attachments.entries()) {
+      const result = await ui.request("proof-image", { url });
+      if (!body.isConnected) return;
+      if (result?.status !== "ok") {
+        unavailable++;
+        continue;
+      }
+      const image = element("img");
+      image.src = result.src;
+      image.alt = `Trade proof attachment ${index + 1} of ${trade.attachments.length}`;
+      try {
+        await image.decode();
+        images.append(image);
+      } catch {
+        unavailable++;
+      }
+      if (!body.isConnected) return;
+    }
+    status.textContent = unavailable === trade.attachments.length ? "Proof attachments couldn’t be loaded."
+      : unavailable ? "Some proof attachments couldn’t be loaded." : "";
+    status.hidden = !unavailable;
+  }
+
   function proofRow(trade) {
     const row = element("li", "roxol-overpay-trade");
     const details = element("div");
     const basket = element("div", "roxol-overpay-basket", trade.opposite);
-    details.append(basket, ui.link(
-      Number.isFinite(Date.parse(trade.date)) ? date.format(new Date(trade.date)) : "View proof",
-      trade.discordUrl, true,
-    ));
+    const label = Number.isFinite(Date.parse(trade.date)) ? date.format(new Date(trade.date)) : "View proof";
+    const proof = trade.attachments.length
+      ? element("button", "roxol-link roxol-proof-trigger", label)
+      : ui.link(label, trade.discordUrl, true);
+    if (trade.attachments.length) {
+      proof.type = "button";
+      proof.setAttribute("aria-label", `Open proof attachments for ${label}`);
+      proof.addEventListener("click", () => void showProof(trade, label));
+    }
+    details.append(basket, proof);
     const value = element("div", "roxol-overpay-trade-values");
     value.append(figure(trade.net));
     if (trade.focalValue) value.append(figure(trade.net / trade.focalValue, true));

@@ -29,6 +29,9 @@ test("pools old and new caption proofs with the focal side consistently oriented
   assert.deepEqual(result.trades.map(({ net }) => net), [1000, -1000, 4000, 3000]);
   assert.equal(result.trades[3].date, "2018-01-01T00:00:00.000Z");
   assert.match(result.trades[0].discordUrl, /\/1500000000000000001$/);
+  assert.deepEqual(result.trades[0].attachments, [image]);
+  assert.deepEqual(result.trades[1].attachments, []);
+  assert.equal(proofOverpay.isAttachment(`${image}?redirect=anything`), false);
 });
 
 test("keeps zero overpay and leaves screenshot-only or ambiguous captions unpriced", () => {

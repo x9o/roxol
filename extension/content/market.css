@@ -965,6 +965,20 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
 }
 .roxol-overpay-trade-values { display: grid; align-content: center; text-align: end; font-weight: 600; }
 .roxol-overpay-trade-values > :last-child { font-size: var(--roxol-text-small); }
+.roxol-proof-trigger {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.roxol-proof-images {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+.roxol-proof-images:not(:empty) { margin-block-end: 12px; }
+.roxol-proof-images img { display: block; max-inline-size: 100%; block-size: auto; }
 
 @container (max-width: 235px) {
   .roxol-overpay-directions { grid-template-columns: minmax(0, 1fr); gap: 5px; }

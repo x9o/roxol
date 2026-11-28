@@ -3,6 +3,8 @@ const RoxolProofOverpay = (() => {
   const number = String.raw`(\d+(?:,\d{3})*(?:\.\d+)?\s*[km]?)`;
   const totals = new RegExp(`^${number}\\s*(?:vs?\\.?|/|→)\\s*${number}(?=\\s|\\(|$)`, "i");
   const explicit = new RegExp(`(?:^|\\()\\s*${number}\\s*(?:op|overpay)\\s+(?:for|on)\\s+([^)]*)`, "i");
+  const isAttachment = (url) => typeof url === "string" &&
+    /^https:\/\/nevos-extension\.com\/api\/proofs\/images\/\d{5,32}$/.test(url);
 
   function amount(text) {
     const value = text.replace(/[\s,]/g, "").toLowerCase();
@@ -61,12 +63,11 @@ const RoxolProofOverpay = (() => {
       seenPosts.add(proof.id);
       const trade = readTrade(proof.content, names);
       if (!trade) continue;
-      const images = Array.isArray(proof.attachments) ? proof.attachments.filter((url) =>
-        typeof url === "string" && /^https:\/\/nevos-extension\.com\/api\/proofs\/images\/\d+$/.test(url)) : [];
-      if (images.some((url) => seenImages.has(url))) continue;
-      for (const url of images) seenImages.add(url);
+      const attachments = Array.isArray(proof.attachments) ? [...new Set(proof.attachments.filter(isAttachment))] : [];
+      if (attachments.some((url) => seenImages.has(url))) continue;
+      for (const url of attachments) seenImages.add(url);
       const time = Number(proof.timestamp) || Number((BigInt(proof.id) >> 22n) + 1420070400000n);
-      trades.push({ ...trade, discordUrl: `${channel}/${proof.id}`,
+      trades.push({ ...trade, attachments, discordUrl: `${channel}/${proof.id}`,
         date: time > 0 && time <= 8.64e15 ? new Date(time).toISOString() : null });
     }
     trades.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
@@ -83,7 +84,7 @@ const RoxolProofOverpay = (() => {
     };
   }
 
-  return { summarize };
+  return { summarize, isAttachment };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = RoxolProofOverpay;

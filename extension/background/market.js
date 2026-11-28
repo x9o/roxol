@@ -109,6 +109,42 @@
       fetchOverpay(assetId, listingName).catch(() => ({ status: "unavailable" })), 48, 2 * 60_000);
   }
 
+  async function readProofImage(url) {
+    const unavailable = { status: "unavailable" };
+    const { [proofTokenKey]: token } = await chrome.storage.local.get(proofTokenKey);
+    if (!token) return unavailable;
+    const response = await fetch(url, {
+      headers: { Accept: "image/*", "From-Extension": "1", "X-NTE-Client": token },
+      credentials: "omit", redirect: "error", signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok || !response.body) return unavailable;
+
+    const reader = response.body.getReader();
+    const chunks = [];
+    let size = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.length;
+        if (size > 5 * 1024 * 1024) return unavailable;
+        chunks.push(value);
+      }
+    } finally {
+      void reader.cancel().catch(() => {});
+    }
+    const bytes = new Uint8Array(await new Blob(chunks).arrayBuffer());
+    const text = (start, end) => String.fromCharCode(...bytes.subarray(start, end));
+    const mime = bytes[0] === 0x89 && text(1, 8) === "PNG\r\n\x1a\n" ? "image/png"
+      : bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff ? "image/jpeg"
+        : text(0, 4) === "RIFF" && text(8, 12) === "WEBP" ? "image/webp"
+          : ["GIF87a", "GIF89a"].includes(text(0, 6)) ? "image/gif" : null;
+    if (!mime) return unavailable;
+    const parts = [];
+    for (let offset = 0; offset < bytes.length; offset += 8192) parts.push(text(offset, offset + 8192));
+    return { status: "ok", src: `data:${mime};base64,${btoa(parts.join(""))}` };
+  }
+
   async function eligibility(id) {
     const { data } = await request(`https://trades.roblox.com/v2/users/${id}/can-trade-with`, {
       credentials: "include",
@@ -170,6 +206,12 @@
       }
       const listingName = typeof message.listingName === "string" ? message.listingName.trim().slice(0, 160) : "";
       return readOverpay(route.id, listingName);
+    },
+    "roxol:market-proof-image"(message, route) {
+      if (route.page !== "detail" || route.kind !== "asset" || !RoxolProofOverpay.isAttachment(message.url)) {
+        return { status: "unavailable" };
+      }
+      return readProofImage(message.url);
     },
     "roxol:market-best-listing"(message) {
       const item = targetOf(message.item?.kind, message.item?.id);

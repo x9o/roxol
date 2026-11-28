@@ -49,7 +49,7 @@ node tools/overpay/overpay-sampling.test.mjs
 
 Open `itemOverpay.items[assetId]` in the valuation report. Each group's `recent` window covers the last 30 days and `allObserved` covers observations supplied in the input. Exported pages determine how much of each window is represented.
 
-The standalone resolver analyzes RoUtility observations. The extension’s Marketplace proof panel uses eligible Nevos captions across all returned dates. Its **Download proof audit** export includes the median and the original post links for the captions that contributed. [Marketplace setup](../../README.md#marketplace)
+The standalone resolver analyzes RoUtility observations. The extension’s Marketplace proof panel uses eligible Nevos captions across all returned dates. Its **Download proof audit** export includes the median, original Discord post links, and Nevos attachment links for the captions that contributed. [Marketplace setup](../../README.md#marketplace)
 
 The standalone valuation report works from the supplied export and uses the end of each observation interval for its recent window. Its `normalizationExclusions` and `excludedRecords` preserve duplicate and malformed inputs that could not be normalized into `trades`. The `profileFailures` map carries reason codes and observed HTTP statuses by asset ID. Individual resolved records include the severe-imbalance flag and historical valuation gaps by item row.
 
