@@ -59,7 +59,9 @@ const RoxolOverpay = (() => {
     if (data.median !== null) {
       const rate = element("dl", "roxol-overpay-rate");
       rate.append(stat("Median OP", ui.format(data.median)));
-      panel.append(rate);
+      const count = data.qualifyingProofCount;
+      panel.append(rate, element("p", "roxol-overpay-note",
+        `${ui.format(count)} qualifying ${count === 1 ? "proof" : "proofs"} · Receive when downgrading or pay when upgrading`));
     }
 
     const details = element("details", "roxol-disclosure roxol-overpay-details");
@@ -68,11 +70,11 @@ const RoxolOverpay = (() => {
       stat("Priced downgrades", ui.format(data.trades.length)),
       stat("Proof posts", ui.format(data.postCount)),
     );
-    if (data.unpricedPosts) stats.append(stat("Posts outside the estimate", ui.format(data.unpricedPosts)));
+    if (data.unpricedPosts) stats.append(stat("Unpriced posts", ui.format(data.unpricedPosts)));
     details.append(
       element("summary", "", "Estimate details"), stats,
       element("p", "roxol-overpay-note",
-        "Uses the median of the absolute OP amounts from qualifying Nevos downgrades as a reference for either direction. Proof rows show the signed result for the target owner. Incoming Robux count after fees and outgoing Robux count in full."),
+        "The median uses Nevos downgrades where the target owner received positive net OP. Proof rows show the signed result across both full baskets. Incoming Robux count after fees and outgoing Robux count in full."),
     );
     const download = ui.button("Download proof audit");
     download.addEventListener("click", () => ui.downloadJson(`roxol-overpay-${assetId}.json`, {
@@ -112,11 +114,9 @@ const RoxolOverpay = (() => {
         status.textContent = messages[data?.reason] ?? "Trade proof data is unavailable.";
         return;
       }
-      const notices = [];
-      if (data.partial) notices.push("Nevos returned only part of its proof history.");
-      if (data.median === null) notices.push("No proof captions with a clear downgrade and item totals for this item.");
-      status.textContent = notices.join(" ");
-      status.hidden = !notices.length;
+      status.textContent = data.median === null ? "No overpay proofs." : "";
+      status.hidden = data.median !== null;
+      if (data.partial) panel.append(element("p", "roxol-overpay-note", "Nevos returned only part of its proof history."));
       render(panel, data, assetId);
     }
 

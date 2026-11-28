@@ -29,7 +29,8 @@ test("pools all dates and orients the full baskets around the focal owner", () =
       post(5, "2x Add + Third / FI\n10k vs 10k"),
     ],
   }, item, feed);
-  assert.equal(result.median, 1000);
+  assert.equal(result.median, 2000);
+  assert.equal(result.qualifyingProofCount, 2);
   assert.equal(result.postCount, 5);
   assert.equal(result.unpricedPosts, 1);
   assert.equal(result.partial, true);
@@ -40,12 +41,13 @@ test("pools all dates and orients the full baskets around the focal owner", () =
   assert.equal(proofOverpay.isAttachment(`${image}?redirect=anything`), false);
 });
 
-test("takes the median of the OP magnitudes and preserves the signed evidence", () => {
+test("uses only positive owner-side OP and preserves the signed evidence", () => {
   const result = proofOverpay.summarize({ results: [
     post(1, "FI / Smaller + Third\n471k vs 495k"),
     post(2, "Smaller + Third / FI\n570k vs 600k"),
   ] }, item, feed);
-  assert.equal(result.median, 27000);
+  assert.equal(result.median, 24000);
+  assert.equal(result.qualifyingProofCount, 1);
   assert.deepEqual(result.trades.map(({ net }) => net), [24000, -30000]);
 });
 
@@ -56,7 +58,8 @@ test("credits incoming Robux after fees and debits all outgoing Robux", () => {
     post(3, "FI + Add + 300 Robux / Smaller + Third\nItem values: 11k vs 11k"),
   ] }, item, feed);
   assert.deepEqual(result.trades.map(({ net }) => net), [-899, 1350, -300]);
-  assert.equal(result.median, 899);
+  assert.equal(result.median, 1350);
+  assert.equal(result.qualifyingProofCount, 1);
   assert.deepEqual(result.trades[0], {
     net: -899,
     given: "FI + Add + 200 RBX",
@@ -70,6 +73,16 @@ test("credits incoming Robux after fees and debits all outgoing Robux", () => {
     discordUrl: "https://discord.com/channels/415246288779608064/535250426061258753/1500000000000000001",
     date: "2026-11-28T00:00:00.000Z",
   });
+});
+
+test("a lowball and an even trade leave the benchmark empty", () => {
+  const result = proofOverpay.summarize({ results: [
+    post(1, "FI / Smaller + Third\n12k vs 11k"),
+    post(2, "Smaller + Third / FI\n11k vs 11k"),
+  ] }, item, feed);
+  assert.equal(result.median, null);
+  assert.equal(result.qualifyingProofCount, 0);
+  assert.deepEqual(result.trades.map(({ net }) => net), [-1000, 0]);
 });
 
 test("excludes sideways swaps, upgrades and ambiguous evidence", () => {

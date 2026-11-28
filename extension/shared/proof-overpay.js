@@ -12,7 +12,8 @@ const RoxolProofOverpay = (() => {
     const multiplier = value.endsWith("m") ? 1e6 : value.endsWith("k") ? 1e3 : 1;
     const result = Number.parseFloat(value) * multiplier;
     const rounded = Math.round(result);
-    return Number.isSafeInteger(rounded) && Math.abs(result - rounded) < 1e-6 ? rounded : null;
+    const roundingError = result - rounded;
+    return Number.isSafeInteger(rounded) && roundingError > -1e-6 && roundingError < 1e-6 ? rounded : null;
   }
 
   function key(text) {
@@ -130,13 +131,11 @@ const RoxolProofOverpay = (() => {
         date: time > 0 && time <= 8.64e15 ? new Date(time).toISOString() : null });
     }
     trades.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
-    const median = (values) => {
-      const sorted = values.sort((a, b) => a - b);
-      const middle = Math.floor(sorted.length / 2);
-      return sorted.length ? (sorted[middle] + sorted[Math.ceil(sorted.length / 2) - 1]) / 2 : null;
-    };
+    const positive = trades.map(({ net }) => net).filter((net) => net > 0).sort((a, b) => a - b);
+    const count = positive.length;
+    const median = count ? (positive[Math.floor(count / 2)] + positive[Math.ceil(count / 2) - 1]) / 2 : null;
     return {
-      status: "ok", channel, trades, median: median(trades.map(({ net }) => Math.abs(net))),
+      status: "ok", channel, trades, median, qualifyingProofCount: count,
       postCount: seenPosts.size, unpricedPosts: seenPosts.size - trades.length,
       partial: Number(data.count) > seenPosts.size,
     };
