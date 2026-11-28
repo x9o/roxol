@@ -67,14 +67,13 @@ const RoxolOverpay = (() => {
     const details = element("details", "roxol-disclosure roxol-overpay-details");
     const stats = element("dl", "roxol-stat-grid");
     stats.append(
-      stat("Priced downgrades", ui.format(data.trades.length)),
       stat("Proof posts", ui.format(data.postCount)),
     );
     if (data.unpricedPosts) stats.append(stat("Unpriced posts", ui.format(data.unpricedPosts)));
     details.append(
       element("summary", "", "Estimate details"), stats,
       element("p", "roxol-overpay-note",
-        "The median uses Nevos downgrades where the target owner received positive net OP. Proof rows show the signed result across both full baskets. Incoming Robux count after fees and outgoing Robux count in full."),
+        "Each proof in the list contributes to the median. Incoming Robux count after fees and outgoing Robux count in full. The audit includes every priced downgrade."),
     );
     const download = ui.button("Download proof audit");
     download.addEventListener("click", () => ui.downloadJson(`roxol-overpay-${assetId}.json`, {
@@ -82,13 +81,14 @@ const RoxolOverpay = (() => {
     }));
     details.append(download);
     panel.append(details);
-    if (!data.trades.length) return;
+    const qualifyingProofs = data.trades.filter(({ net }) => net > 0);
+    if (!qualifyingProofs.length) return;
 
     const history = element("details", "roxol-disclosure roxol-overpay-details roxol-overpay-history");
     const list = element("ul", "roxol-overpay-trades");
-    history.append(element("summary", "", `Priced proofs (${ui.format(data.trades.length)})`), list);
+    history.append(element("summary", "", `Qualifying proofs (${ui.format(qualifyingProofs.length)})`), list);
     history.addEventListener("toggle", () => {
-      if (history.open && !list.childElementCount) list.append(...data.trades.map(proofRow));
+      if (history.open && !list.childElementCount) list.append(...qualifyingProofs.map(proofRow));
     });
     panel.append(history);
   }
