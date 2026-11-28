@@ -17,6 +17,8 @@ Roxol helps you research Roblox Limiteds and compare trades. The Chrome and Edge
 
 The toolbar popup shows your Roblox sign-in status and lets you toggle item stats, sales history, trade comparisons, and other enhancements. Settings are saved in your browser profile and apply to open Roblox tabs as you change them.
 
+The browser toolbar and popup display Roxol's circular logo. If you update an existing unpacked installation, select **Reload** on the browser's Extensions page to pick up the new icon.
+
 ![Roxol extension popup with Roblox sign-in status, Open Trades, and feature switches](docs/screenshots/extension-popup.png)
 
 ## Marketplace
