@@ -265,32 +265,22 @@
 }
 .roxol-card-overlay .roxol-sales-preview { pointer-events: auto; }
 .roxol-card .roxol-metrics .roxol-metric dd { font-size: 1em; }
-.roxol-market.roxol-trade-total {
+.roxol-market:is(.roxol-trade-total, .roxol-trade-rap-label) {
   color: inherit;
   font: inherit;
+}
+
+.roxol-trade-total .roxol-trade-total-figure {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   white-space: nowrap;
 }
 
-.roxol-trade-total-value {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 2px;
-}
-
-.roxol-trade-total-value .roxol-icon {
+.roxol-trade-total-figure .roxol-icon {
   width: 1em;
   height: 1em;
   margin: 0;
-}
-
-.roxol-trade-total-demand {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 2px;
-  font-size: .875rem;
-  font-weight: 600;
 }
 
 .roxol-trade-demand-bars {

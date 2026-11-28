@@ -41,7 +41,7 @@ Supported Roblox profiles and inventories also show RAP and Value totals for loa
 Sign in and open Roblox **Trades**. Roxol adds comparisons to the trade lists, the selected trade, and the send and counter forms.
 
 - **Scan the trade list.** In **Inbound**, **Outbound**, **Completed**, and **Closed** or **Inactive**, each trade preview puts what you give on top and what you receive below. The Robux icon marks RAP and the Rolimon's icon marks Value. Green and red indicators show gains and losses. Hover over either pair to read its totals.
-- **Compare both offers.** Open a trade or build an offer to see each side's RAP, Rolimon's Value, and average demand across rated copies. The badges between the offers show the signed RAP and Value differences. Roxol counts outgoing Robux in full and incoming Robux after the trade fee.
+- **Compare both offers.** Open a trade or build an offer to see separate rows for Total Value (RAP), Rolimon's Value, and average Demand across rated copies. Each row follows Roblox's trade layout with the label on the left and the figure on the right. The badges between the offers show the signed RAP and Value differences. Roxol counts outgoing Robux in full and incoming Robux after the trade fee.
 - **Inspect individual items.** Trade and inventory-picker cards show RAP, Value or a labeled fallback, demand or average daily sales, and projected warnings where available. Open an item's sales history or follow its Rolimon's link to check the numbers behind the offer.
 
 > **Screenshot placeholder — Roblox Trades.** Show a selected trade with its list preview visible, both offers and their demand rows, and the signed RAP and Value badges between the offers.

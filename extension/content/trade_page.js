@@ -330,32 +330,43 @@
     return { average: rated ? sum / rated : null, rated, count: prices.length };
   }
 
+  function offerTotalRow(line, amount, title, figure) {
+    const nativeLabel = [...line.children].find((child) => !child.contains(amount));
+    const row = ui.element(line.localName, "robux-line roxol-market roxol-trade-total");
+    const label = ui.element(nativeLabel?.localName ?? "span", nativeLabel?.className ?? "text-label", title);
+    const value = ui.element(amount.localName, amount.className);
+    value.append(figure);
+    row.append(label, value);
+    return row;
+  }
+
   function renderOfferTotals(offers, values, demands) {
     const active = new Set();
     for (const [side, { offer }] of offers.entries()) {
-      const rap = offer.querySelector(".robux-line:not(.ng-hide):not([ng-show]) .robux-line-amount .robux-line-value.text-robux-lg");
+      const rap = offer.querySelector(".robux-line:not(.roxol-market, .ng-hide, [ng-show]) .robux-line-amount .robux-line-value.text-robux-lg");
       if (!rap) continue;
       active.add(rap);
+      const line = rap.closest(".robux-line");
       let widget = offerTotals.get(rap);
       if (!widget) {
-        const group = ui.element("span", "roxol-market roxol-trade-total", " (RAP)");
-        const row = ui.element("span", "roxol-trade-total-value text-robux-lg");
-        const icon = ui.icon("rolimons");
-        icon.alt = "Rolimon's value";
+        const suffix = ui.element("span", "roxol-market roxol-trade-rap-label", " (RAP)");
+        const valueFigure = ui.element("span", "roxol-trade-total-figure robux-line-value text-robux-lg");
         const number = ui.element("span", "");
-        row.append(icon, number);
-        const demandRow = ui.element("span", "roxol-trade-total-demand");
+        valueFigure.append(ui.icon("rolimons"), number);
+        const demandFigure = ui.element("span", "roxol-trade-total-figure robux-line-value text-robux-lg");
         const bars = ui.element("span", "roxol-trade-demand-bars");
         bars.setAttribute("aria-hidden", "true");
         for (let bar = 1; bar <= 5; bar++) bars.append(ui.element("span", ""));
         const score = ui.element("span", "roxol-number");
-        demandRow.append(ui.element("span", "", "Demand"), bars, score);
-        group.append(row, demandRow);
-        widget = { group, row, number, demandRow, bars, score };
+        demandFigure.append(bars, score);
+        const amount = rap.closest(".robux-line-amount");
+        const valueRow = offerTotalRow(line, amount, "Rolimon’s Value:", valueFigure);
+        const demandRow = offerTotalRow(line, amount, "Demand:", demandFigure);
+        widget = { suffix, valueRow, number, demandRow, bars, score };
         offerTotals.set(rap, widget);
       }
       const value = values?.[side];
-      widget.row.hidden = value == null;
+      widget.valueRow.hidden = value == null;
       const formatted = value == null ? "" : ui.format(value);
       if (widget.number.textContent !== formatted) widget.number.textContent = formatted;
       const demand = demands?.[side];
@@ -372,11 +383,16 @@
           bar.style.setProperty("--roxol-demand-fill", `${fill * 100}%`);
         }
       }
-      if (rap.nextElementSibling !== widget.group) rap.after(widget.group);
+      if (rap.nextElementSibling !== widget.suffix) rap.after(widget.suffix);
+      if (line.nextElementSibling !== widget.valueRow || widget.valueRow.nextElementSibling !== widget.demandRow) {
+        line.after(widget.valueRow, widget.demandRow);
+      }
     }
-    for (const [rap, { group }] of offerTotals) {
+    for (const [rap, { suffix, valueRow, demandRow }] of offerTotals) {
       if (active.has(rap)) continue;
-      group.remove();
+      suffix.remove();
+      valueRow.remove();
+      demandRow.remove();
       offerTotals.delete(rap);
     }
   }
