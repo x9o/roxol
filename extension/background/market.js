@@ -2,14 +2,20 @@
   const { idOf, targetOf, routeOf, keyOf, amount, copyIdOf } = RoxolTargets;
   const {
     request, cached, remember, itemTTL, failureTTL, readItemFeed, withItemMetadata,
-    readTrackedSales, readDailySales, readBestListing, readDetails, readResale, fetchTradeHistory, readTradeHistory,
+    readTrackedSales, readDailySales, readBestListing, readDetails, readResale, readTradeHistory,
   } = RoxolPublicMarket;
   const inventoryCache = new Map();
-  const overpayCache = new Map();
   const playerCache = new Map();
-  const overpayStorageKey = "overpay-samples-v1";
-  const overpayTTL = 2 * 60_000;
-  let saveSamples = Promise.resolve();
+  const proofCache = new Map();
+  let proofRetryAt = 0;
+  const proofTokenKey = "nevosProofToken";
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && Object.hasOwn(changes, proofTokenKey)) {
+      proofCache.clear();
+      proofRetryAt = 0;
+    }
+  });
 
   function readPlayerBadges(id) {
     return cached(playerCache, id) || remember(playerCache, id,
@@ -72,34 +78,35 @@
     return { images };
   }
 
-  async function fetchOverpay(assetId) {
-    const feed = readItemFeed();
-    const { [overpayStorageKey]: entries = [] } = await chrome.storage.local.get(overpayStorageKey).catch(() => ({}));
-    const previous = entries.find((entry) => entry.assetId === assetId);
-    const now = Date.now();
-    if (previous?.checkedAt + overpayTTL > now) {
-      return RoxolOverpaySampling.summarizeSample({ ...previous, now, feed: await feed });
-    }
-
-    const { saved, ...result } = await RoxolOverpaySampling.sampleItem({
-      assetId, previous, now, feed,
-      readPage: (page, limit) => fetchTradeHistory(assetId, page, limit),
+  async function fetchOverpay(assetId, listingName) {
+    const { [proofTokenKey]: token } = await chrome.storage.local.get(proofTokenKey);
+    if (!token) return { status: "unavailable", reason: "token-required" };
+    if (Date.now() < proofRetryAt) return { status: "unavailable", reason: "rate-limited" };
+    const search = (term) => request(`https://nevos-extension.com/api/proofs/search/${encodeURIComponent(term)}`, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json", "From-Extension": "1", "X-NTE-Client": token },
     });
-    if (saved) {
-      saveSamples = saveSamples.then(async () => {
-        const { [overpayStorageKey]: stored = [] } = await chrome.storage.local.get(overpayStorageKey);
-        const updated = [saved, ...stored.filter((entry) => entry.assetId !== assetId)];
-        await chrome.storage.local.set({ [overpayStorageKey]: updated.slice(0, 12) });
-      }).catch(() => {});
-      await saveSamples;
+    let result = await search(assetId);
+    if (listingName && (result.status === 404 || result.status === 200 && !result.data?.results?.length &&
+        !result.data?.item_id && !result.data?.item_name && !result.data?.acronym)) {
+      result = await search(listingName);
     }
-    return result;
+    const { status, data, retryAfter } = result;
+    if (status === 429) {
+      const delay = /^\d+$/.test(retryAfter ?? "") ? Date.now() + Number(retryAfter) * 1000 : Date.parse(retryAfter);
+      proofRetryAt = Number.isFinite(delay) ? delay : Date.now() + 60_000;
+      return { status: "unavailable", reason: "rate-limited" };
+    }
+    if (status === 401 || status === 403) return { status: "unavailable", reason: "access-denied" };
+    if (status === 404) return RoxolProofOverpay.summarize({ results: [] }, {});
+    if (status !== 200 || data?.source?.trim?.() === "edge-cache" || !Array.isArray(data?.results) ||
+        (data.item_id && idOf(data.item_id) !== assetId)) return { status: "unavailable" };
+    return RoxolProofOverpay.summarize(data, { name: listingName });
   }
 
-  function readOverpay(assetId) {
-    return cached(overpayCache, assetId) || remember(overpayCache, assetId, fetchOverpay(assetId), 12,
-      (result) => result.partial || result.pricedAt == null ? failureTTL :
-        Math.max(0, Math.min(result.checkedAt + overpayTTL, result.pricedAt + itemTTL) - Date.now()));
+  function readOverpay(assetId, listingName) {
+    return cached(proofCache, assetId) || remember(proofCache, assetId,
+      fetchOverpay(assetId, listingName).catch(() => ({ status: "unavailable" })), 48, 2 * 60_000);
   }
 
   async function eligibility(id) {
@@ -161,7 +168,8 @@
       if (route.page !== "detail" || route.kind !== "asset" || message.assetId !== route.id) {
         return { status: "unavailable" };
       }
-      return readOverpay(route.id);
+      const listingName = typeof message.listingName === "string" ? message.listingName.trim().slice(0, 160) : "";
+      return readOverpay(route.id, listingName);
     },
     "roxol:market-best-listing"(message) {
       const item = targetOf(message.item?.kind, message.item?.id);

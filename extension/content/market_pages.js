@@ -264,7 +264,7 @@
     const valueAnchor = page.deals?.previousElementSibling === anchor ? page.deals : anchor;
     if (page.panel && page.panel.previousElementSibling !== valueAnchor) valueAnchor.after(page.panel);
     if (preferences.itemOverpay && !page.overpayPanel && page.kind === "asset" && limited) {
-      page.overpayPanel = RoxolOverpay.mount(page.id);
+      page.overpayPanel = RoxolOverpay.mount(page.id, data?.name || title?.textContent);
       panels.add(page.overpayPanel);
     }
     const overpayAnchor = page.panel || valueAnchor;

@@ -104,18 +104,18 @@ test("partial pages do not replace a complete cache and cached rows still age ou
   assert.equal((await sample(rows, { unavailablePage: 1 })).status, "unavailable");
 });
 
-test("Marketplace deduplicates requests, reuses saved samples after a worker restart and refreshes after two minutes", async () => {
+test("Marketplace fetches overpay directly from Nevos and preserves RoUtility trade history", async () => {
   const scripts = await Promise.all([
-    "shared/market_targets.js", "shared/trade-valuations.js", "shared/item-overpay.js", "shared/overpay-sampling.js",
+    "shared/market_targets.js", "shared/trade-valuations.js", "shared/item-overpay.js", "shared/proof-overpay.js",
     "vendor/nevos/nte_sales_core.js", "vendor/nevos/rolimons_item_details.js", "background/rolimons.js",
     "background/public-market.js", "background/market.js",
   ].map((file) => readFile(new URL(`../../extension/${file}`, import.meta.url), "utf8")));
-  const saved = {};
+  const saved = { nevosProofToken: "fixture-token" };
   const urls = [];
   let currentTime = now;
-  let currentRap = 110;
   const priceUrl = "https://api.rolimons.com/items/v3/itemdetails";
-  const historyUrl = (limit) => `https://routility.io/web/item-trades/101?kind=trade&range=all&limit=${limit}&page=1`;
+  const historyUrl = "https://routility.io/web/item-trades/101?kind=trade&range=all&limit=20&page=1";
+  const proofUrl = "https://nevos-extension.com/api/proofs/search/101";
   class WorkerDate extends Date {
     static now() { return currentTime; }
   }
@@ -126,19 +126,24 @@ test("Marketplace deduplicates requests, reuses saved samples after a worker res
       Date: WorkerDate, AbortSignal, URL,
       chrome: {
         runtime: { id: "roxol", onMessage: { addListener: (handler) => { listener = handler; } } },
-        storage: { local: {
-          get: async (key) => ({ [key]: structuredClone(saved[key]) }),
-          set: async (entries) => Object.assign(saved, structuredClone(entries)),
-        } },
+        storage: { local: { get: async (key) => ({ [key]: saved[key] }) }, onChanged: { addListener() {} } },
       },
-      fetch: async (url) => {
+      fetch: async (url, init) => {
         urls.push(url);
+        if (url === proofUrl) {
+          assert.equal(init.method, "POST");
+          assert.equal(init.headers["X-NTE-Client"], "fixture-token");
+          assert.equal(init.credentials, "omit");
+          return Response.json({ item_id: 101, item_name: "Page item", count: 1, results: [{
+            id: "1500000000000000000", content: "Page item / Other item\n1000 vs 1012",
+          }] });
+        }
         if (url === priceUrl) return Response.json({ success: true, items: {
-          101: ["Page item", "", 60, 100, 100], 102: ["Other item", "", currentRap, -1, currentRap],
+          101: ["Page item", "", 60, 100, 100], 102: ["Other item", "", 110, -1, 110],
         } });
-        assert.ok([historyUrl(20), historyUrl(50)].includes(url), `Unexpected request to ${url}`);
+        assert.equal(url, historyUrl);
         const observation = (now - 60_000) / 1000;
-        return Response.json({ page: 1, pages: 1, total: 1, per_page: url === historyUrl(20) ? 20 : 50, trades: [{
+        return Response.json({ page: 1, pages: 1, total: 1, per_page: 20, trades: [{
           kind: "trade", trade_id: "trade-1", ts: observation, ts_latest: observation,
           side_a_items: [{ asset_id: 101, value_then: 90, rap: 50 }],
           side_b_items: [{ asset_id: 102, value_then: null, rap: 80 }],
@@ -153,20 +158,18 @@ test("Marketplace deduplicates requests, reuses saved samples after a worker res
 
   const read = startWorker();
   const [first, second, history] = await Promise.all([read(), read(), read("trade-history", { page: 1 })]);
-  const median = (result) => result.groups.swap.summary.overpay.median;
-  assert.deepEqual([median(first), median(second)], [10, 10]);
+  assert.deepEqual([first.median, second.median], [12, 12]);
   assert.equal(history.prices[101].value, 100);
   assert.equal(history.prices[102].value, 110);
   assert.equal(history.trades[0].sideA[0].valueThen, 90);
-  assert.deepEqual(urls.toSorted(), [priceUrl, historyUrl(20), historyUrl(50)].toSorted());
+  assert.deepEqual(urls.toSorted(), [priceUrl, historyUrl, proofUrl].toSorted());
   currentTime += 119_999;
-  currentRap = 120;
-  const restarted = startWorker();
-  assert.equal(median(await restarted()), 20);
-  assert.equal(urls.at(-1), priceUrl);
-  assert.equal(urls.length, 4);
+  assert.equal((await read()).median, 12);
+  assert.equal(urls.length, 3);
   currentTime++;
-  assert.equal(median(await restarted()), 20);
-  assert.equal(urls.at(-1), historyUrl(50));
-  assert.equal(urls.length, 5);
+  assert.equal((await read()).median, 12);
+  assert.equal(urls.at(-1), proofUrl);
+  delete saved.nevosProofToken;
+  assert.equal((await startWorker()()).reason, "token-required");
+  assert.equal(urls.length, 4);
 });

@@ -1,5 +1,5 @@
 const form = document.querySelector("form");
-const controls = [...form.querySelectorAll("select, input")];
+const controls = [...form.querySelectorAll("select, input[type=checkbox]")];
 const groups = form.querySelectorAll("[data-feature]");
 const settingsStatus = document.querySelector("#settings-status");
 const pageStatus = document.querySelector("#page-status");
@@ -43,6 +43,23 @@ form.addEventListener("change", async ({ target: control }) => {
   } catch {
     renderControl(control);
     showSettingsError("Roxol couldn't save this preference.");
+  }
+});
+
+const proofToken = document.querySelector("#nevos-proof-token");
+const proofTokenKey = "nevosProofToken";
+void chrome.storage.local.get(proofTokenKey).then((settings) => {
+  proofToken.value = settings[proofTokenKey] ?? "";
+  proofToken.disabled = false;
+}).catch(() => showSettingsError("Roxol couldn't load the proof token."));
+proofToken.addEventListener("change", async () => {
+  try {
+    const value = proofToken.value.trim();
+    if (value) await chrome.storage.local.set({ [proofTokenKey]: value });
+    else await chrome.storage.local.remove(proofTokenKey);
+    showSettingsError("");
+  } catch {
+    showSettingsError("Roxol couldn't save the proof token.");
   }
 });
 

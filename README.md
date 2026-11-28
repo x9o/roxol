@@ -31,6 +31,7 @@ Open a Limited in Roblox Marketplace to check its price, recent sales, and obser
 ![Silver King of the Night Marketplace listing with Best Price comparisons, Value, demand, and the recent sales preview](docs/screenshots/marketplace-sales-preview.png)
 
 - **View trades.** On supported Limited asset listings, select **View trades** to browse RoUtility's observed exchanges. Compare both sides at current Rolimon's Value, with RAP as a fallback. Expand **Valuation details** for the values, quantities, serials, and observation times RoUtility recorded where available. **Export viewed trades** saves the pages you've opened as JSON.
+- **Trade proof overpay.** Enter your Nevos client token in **Roxol → Item pages → Nevos proof token**, then refresh the Limited's listing. The extension fetches proof posts directly from Nevos and pools one-for-one and one-for-many trades without an age cutoff. The estimate uses the values and any Robux as reported in captions that clearly show the Limited alone on one side. **Priced proofs** links to the original Discord posts.
 
 > **Screenshot placeholder — Observed trades.** Show the **View trades** dialog with two item baskets and expanded **Valuation details**.
 
@@ -93,7 +94,7 @@ The bundled **Roxol Trade Analysis** skill assesses a trade screenshot or writte
 
 ## Planned features
 
-- Marketplace overpay estimates based on trade proofs from Rolimon's Discord, plus expanded trade search, inventory checks, and alerts. [Trade feature plans](TRADE_UI_PLAN.md)
+- Expanded trade search, inventory checks, and alerts. [Trade feature plans](TRADE_UI_PLAN.md)
 
 ## Project links
 

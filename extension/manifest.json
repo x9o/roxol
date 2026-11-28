@@ -37,7 +37,8 @@
     "https://thumbnails.roblox.com/*",
     "https://api.rolimons.com/*",
     "https://www.rolimons.com/*",
-    "https://routility.io/*"
+    "https://routility.io/*",
+    "https://nevos-extension.com/*"
   ],
   "content_scripts": [
     {
