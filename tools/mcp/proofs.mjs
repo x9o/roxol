@@ -3,7 +3,10 @@ import { z } from "zod";
 import targets from "../../extension/shared/market_targets.js";
 import market from "../../extension/background/public-market.js";
 
-const proofLink = /^https:\/\/discord\.com\/channels\/415246288779608064\/535250426061258753\/(\d{17,20})$/;
+export const proofOrigin = Object.freeze({
+  name: "`value-requests` channel in Rolimon's official Discord",
+  url: "https://discord.com/channels/415246288779608064/535250426061258753",
+});
 export const proofImage = /^https:\/\/nevos-extension\.com\/api\/proofs\/images\/(\d{5,32})$/;
 const nevosNetworkRejection = "Proofs are not available from proxy or datacenter networks.";
 const id = z.string().regex(/^[1-9]\d{0,19}$/);
@@ -237,7 +240,8 @@ export async function loadProofs(file) {
   const records = document.pricedTrades.flatMap((entry, index) => {
     if (entry?.conflict || entry?.status === "conflict") return [];
     const parsed = row.safeParse(entry);
-    if (!parsed.success || proofLink.exec(parsed.data.link)?.[1] !== parsed.data.id) {
+    if (!parsed.success || !/^\d{17,20}$/.test(parsed.data.id) ||
+        parsed.data.link !== `${proofOrigin.url}/${parsed.data.id}`) {
       throw new Error(`Invalid reviewed public proof at index ${index}.`);
     }
     const { id, link, date, offset, baskets, robux, robuxBasis, hashes } = parsed.data;

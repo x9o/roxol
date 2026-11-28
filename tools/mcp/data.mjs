@@ -2,6 +2,7 @@ import market from "../../extension/background/public-market.js";
 import targets from "../../extension/shared/market_targets.js";
 import valuation from "../../extension/shared/trade-valuations.js";
 import vendor from "../../extension/vendor/nevos/rolimons_item_details.js";
+import { proofOrigin } from "./proofs.mjs";
 
 const { request, cached, remember, itemTTL } = market;
 const { keyOf, idOf, copyIdOf, rolimonsSalesUrl } = targets;
@@ -296,9 +297,9 @@ export async function tradeProofs(proofs, item, { page, limit, readScreenshots, 
     result = { item, ...observed(nevos.source, Date.now()), evidenceType: "nevos_proof_post",
       providerCount: count(nevos.count), ...pageOfProofs([...posts.values()].sort(recentFirst), page, limit) };
   } else {
-    const source = "https://discord.com/channels/415246288779608064/535250426061258753";
+    const source = proofOrigin.url;
     if (!proofs && !indexed.size) {
-      return { item, source, status: "unavailable", reason: "no_reviewed_public_proof_export_configured", nevos };
+      return { item, source, proofOrigin, status: "unavailable", reason: "no_reviewed_public_proof_export_configured", nevos };
     }
     const reviewedPosts = new Set(reviewed.map(({ postId }) => postId));
     const records = [...reviewed, ...[...indexed.values()].filter(({ postId }) => !reviewedPosts.has(postId))]
@@ -320,8 +321,8 @@ export async function tradeProofs(proofs, item, { page, limit, readScreenshots, 
       start + offset >= screenshotOffset && start + offset < screenshotOffset + 12 && !known.has(attachment)) : [];
     const unprocessed = attachments.some((attachment) => !known.has(attachment) && !selected.includes(attachment));
     const evidence = [...stored, ...await Promise.all(selected.map((attachment) => screenshots.read(record, attachment)))];
-    return { ...record, ...(evidence.length ? { screenshots: evidence } : {}),
+    return { ...record, discordUrl: `${proofOrigin.url}/${record.postId}`, ...(evidence.length ? { screenshots: evidence } : {}),
       ...(readScreenshots && unprocessed ? { moreScreenshots: true } : {}) };
   }));
-  return result;
+  return { ...result, proofOrigin };
 }

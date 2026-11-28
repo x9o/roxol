@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { copyHistory, findItems, history, itemStatsBatch, tradeProofs } from "./data.mjs";
+import { proofOrigin } from "./proofs.mjs";
 import targets from "../../extension/shared/market_targets.js";
 
 const { idOf, copyIdOf, keyOf } = targets;
@@ -153,7 +154,7 @@ function marketSample({ records, total, hasMore, ...metadata }, ref) {
 
 function addProofs(result, proofs, ref) {
   for (const row of result.records ?? []) {
-    const post = proofs[row.postId] ??= {};
+    const post = proofs[row.postId] ??= { discordUrl: row.discordUrl };
     if (row.attachments && !post.nevos) {
       const { postedAt, content, attachments } = row;
       post.nevos = { postedAt, ...(content ? { content: content.slice(0, 1200) } : {}),
@@ -254,6 +255,6 @@ export async function tradeContext(args, reviewed, readLiveProofs, proofOptions)
     ...(tradeId ? { tradeId, tradeLookup: ref({ source: `https://trades.roblox.com/v2/trades/${tradeId}`,
       status: "unavailable", reason: "requires_authorized_roblox_session" }) } : {}),
     give: given, receive: received, nominalWL: { rap: difference("totalRap"), value: difference("totalValue") },
-    items, ...(proofLimit ? { proofs } : {}), ...(ownershipLimit ? { ownership } : {}), sources,
+    items, ...(proofLimit ? { proofOrigin, proofs } : {}), ...(ownershipLimit ? { ownership } : {}), sources,
   };
 }

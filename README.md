@@ -48,7 +48,7 @@ Sign in and open Roblox **Trades**. Roxol adds comparisons to the trade lists, t
 
 ## Connect Roxol MCP
 
-Roxol's Model Context Protocol (MCP) server gives ChatGPT live market lookups from Roblox, Rolimon's, and RoUtility. With Nevos configured, it also retrieves trade proofs from the `value-requests` channel in Rolimon's Discord. It runs separately from the browser extension and uses public data. For trade comparisons, give it both offers and any Robux on each side. A private Roblox trade ID alone is insufficient.
+Roxol's Model Context Protocol (MCP) server gives ChatGPT live market lookups from Roblox, Rolimon's, and RoUtility. It also retrieves proofed trades from the `value-requests` channel in Rolimon's official Discord through Nevos. It runs separately from the browser extension and uses public data. For trade comparisons, give it both offers and any Robux on each side. A private Roblox trade ID alone is insufficient.
 
 | What you can ask for | What Roxol can retrieve |
 | --- | --- |
@@ -56,7 +56,7 @@ Roxol's Model Context Protocol (MCP) server gives ChatGPT live market lookups fr
 | “Show the 10 most liquid Limiteds at 100k–250k Value with High or Amazing demand.” | Rank Limiteds by sales volume, price, Value or RAP change, or discount to Value. Compare each item's ranking metric with recent sales and the current lowest resale ask. |
 | “Show recent resale activity for this item.” | Rolimon's tracked sales and Value changes, plus Roblox daily resale prices and volume. |
 | “Compare these two offers.” | A trade summary with fee-adjusted RAP and Value differences, recent market activity, and related proof posts where available. |
-| “Show me up to 30 trade proofs for BIA.” | Available posts from the `value-requests` channel in Rolimon's Discord, with original captions and attachments. The number of live posts depends on what Nevos returns. Roxol can return an original screenshot and can optionally transcribe and index screenshots with server-side vision configured. |
+| “Show me up to 30 trade proofs for BIA.” | Proofed trades from the `value-requests` channel in Rolimon's official Discord, with links to the original posts, captions, and attachments. The number of live posts depends on what Nevos returns. Roxol can return an original screenshot and can optionally transcribe and index screenshots with server-side vision configured. |
 | “Check this copy's ownership history.” | RoUtility's tracked ownership changes for a UAID or collectible instance UUID. RoUtility also provides item-level transfer observations. |
 
 ### Get started on Windows

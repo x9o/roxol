@@ -197,6 +197,11 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   t.after(() => client.close());
   const { tools } = await client.listTools();
   assert.equal(tools.length, 9);
+  const proofChannelName = "`value-requests` channel in Rolimon's official Discord";
+  assert.ok(client.getInstructions().includes(proofChannelName));
+  for (const name of ["get_trade_proofs", "get_trade_context", "get_trade_proof_image"]) {
+    assert.ok(tools.find((tool) => tool.name === name).description.includes(proofChannelName));
+  }
   assert(tools.every(({ name, annotations }) => annotations.readOnlyHint === (name !== "get_trade_proofs") &&
     annotations.destructiveHint === false));
   const viewProof = (attachment) => client.callTool({ name: "get_trade_proof_image", arguments: { attachment } });
@@ -306,6 +311,7 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   assert.match(live.instanceId, /^[0-9a-f-]{36}$/);
   assert.deepEqual(live.item, { id: assetId, kind: "asset" });
   assert.equal(live.evidenceType, "nevos_proof_post");
+  assert.deepEqual(live.proofOrigin, { name: proofChannelName, url: link.slice(0, link.lastIndexOf("/")) });
   assert.equal(live.providerCount, 4);
   assert.equal(live.total, 2);
   assert.equal(live.hasMore, true);
@@ -314,6 +320,7 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   const older = await call("get_trade_proofs", { ...proofArgs, limit: 1, page: 2 });
   assert.equal(older.hasMore, false);
   assert.equal(older.records[0].postId, postId);
+  assert.equal(older.records[0].discordUrl, link);
   assert.equal(older.records[0].content, "Trade screenshot");
   assert.deepEqual(older.records[0].attachments, ["https://nevos-extension.com/api/proofs/images/123456"]);
 
@@ -375,6 +382,8 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   assert.equal(context.ownership[uaid].records.length, 2);
   assert.equal(context.sources[context.tradeLookup].reason, "requires_authorized_roblox_session");
   assert.equal(Object.keys(context.proofs).length, 2);
+  assert.deepEqual(context.proofOrigin, live.proofOrigin);
+  assert.equal(context.proofs[postId].discordUrl, link);
   assert.deepEqual(context.proofs[postId].screenshots, [screenshot]);
   assert.deepEqual(context.items[givenKey].proofs.postIds, context.items["asset:9"].proofs.postIds);
 
@@ -575,6 +584,6 @@ test("Missing Nevos credentials skip live requests and preserve the reviewed fal
   const result = await tradeProofs(reviewed, item, { page: 1, limit: 20 }, createProofClient({}));
   assert.equal(result.evidenceType, "reviewed_screenshot");
   assert.equal(result.nevos.reason, "no_nevos_client_token");
-  assert.deepEqual(result.records, [record]);
+  assert.deepEqual(result.records, [{ ...record, discordUrl: `${result.proofOrigin.url}/${record.postId}` }]);
   assert.equal(fetch.mock.callCount(), 0);
 });

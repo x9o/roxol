@@ -6,7 +6,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import { copyHistory, findItems, itemStats, history, tradeObservations, tradeProofs } from "./data.mjs";
 import targets from "../../extension/shared/market_targets.js";
-import { createFaceAliases, createProofClient, loadProofs, proofImage } from "./proofs.mjs";
+import { createFaceAliases, createProofClient, loadProofs, proofImage, proofOrigin } from "./proofs.mjs";
 import { createScreenshotIndex } from "./proof-screenshots.mjs";
 import { tradeContext, tradeContextInput } from "./trade-context.mjs";
 import { searchLimiteds, searchLimitedsInput } from "./search-limiteds.mjs";
@@ -25,8 +25,8 @@ const annotations = { readOnlyHint: true, destructiveHint: false, idempotentHint
 function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
   const server = new McpServer({ name: "roxol-market-data", version: "1.0.0" }, {
     instructions: "Find item IDs with find_items. Source statuses and timestamps describe each provider independently. " +
-      "RoUtility trades are ownership-transfer observations. Nevos proof posts are user-reported. " +
-      "Use get_trade_proof_image to view a Nevos attachment from get_trade_proofs. The optional readScreenshots flag transcribes and indexes both sides when server-side vision is configured. Label proof W/L by its screenshot price field and leave any null fee-adjusted result unknown. " +
+      `RoUtility trades are ownership-transfer observations. In user-facing answers, refer to user-reported proof posts as proofed trades from the ${proofOrigin.name}. Use discordUrl to cite original posts. Nevos is the retrieval provider. ` +
+      "Use get_trade_proof_image to view an attachment from get_trade_proofs. The optional readScreenshots flag transcribes and indexes both sides when server-side vision is configured. Label proof W/L by its screenshot price field and leave any null fee-adjusted result unknown. " +
       "Prices and history use Robux unless a field explicitly names another currency.",
   });
 
@@ -43,7 +43,7 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
     searchLimitedsInput, searchLimiteds);
   register("get_item_stats", "Get public item statistics by provider, including RAP, assigned Value, demand, supply and best price where available.",
     z.strictObject(target), itemStats);
-  register("get_trade_context", "Gather market statistics, sales and trade proofs for an entire Roblox Limiteds trade, with optional tracked ownership for identified copies. Give and receive are from your perspective. Provide both baskets for nominal received-minus-given RAP and Value. A trade ID alone requires a signed-in Roblox session.",
+  register("get_trade_context", `Gather market statistics, sales and proofed trades from the ${proofOrigin.name} for an entire Roblox Limiteds trade, with optional tracked ownership for identified copies. Give and receive are from your perspective. Provide both baskets for nominal received-minus-given RAP and Value. A trade ID alone requires a signed-in Roblox session.`,
     tradeContextInput, (args) => tradeContext(args, proofs, readLiveProofs, proofOptions), { includeText: false });
   register("get_market_history", "Get one paginated series of Rolimon's tracked sales, assigned Value changes, or Roblox daily resale prices and volumes. Newest observations first. When Value history is rate_limited, retry at or after retryAt.",
     z.strictObject({ ...target, series: z.enum(["rolimons_sales", "rolimons_value_changes", "roblox_resale"]), page, limit }),
@@ -54,12 +54,12 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
     z.strictObject({ uaid: id.optional(), collectibleInstanceId: collectibleInstanceId.optional(), page, limit })
       .refine(({ uaid, collectibleInstanceId }) => Boolean(uaid) !== Boolean(collectibleInstanceId),
         "Provide either uaid or collectibleInstanceId."), copyHistory);
-  register("get_trade_proofs", "Find public trade proof posts by item ID, name, or acronym, including indexed screenshots and equivalent legacy face or bundle IDs. " +
+  register("get_trade_proofs", `Find proofed trades from the ${proofOrigin.name} by item ID, name, or acronym, including indexed screenshots and equivalent legacy face or bundle IDs. Credit the channel and cite original posts using discordUrl. Nevos is the retrieval provider. ` +
     "For practical overpay analysis, 3–5 recent, independent and comparable trade proofs with consistent overpays are generally sufficient for moderate confidence. " +
     "Prioritise recency, trade direction and the current Value cycle over sample size. " +
     "Do not demand unnecessarily large samples or treat limited historical coverage as an analysis blocker when sufficient relevant evidence is available.",
     z.strictObject({ id: id.optional(), query: query.optional(), kind: kind.optional(), page, limit,
-      readScreenshots: z.boolean().default(false).describe("Read both offers, Robux and the difference after fees from the page's Nevos screenshots, and index completed trades across all their items. Requires server-side vision configuration."),
+      readScreenshots: z.boolean().default(false).describe("Read both offers, Robux and the difference after fees from the page's proof screenshots, and index completed trades across all their items. Requires server-side vision configuration."),
       screenshotOffset: z.number().int().min(0).max(10_000).default(0)
         .describe("Zero-based attachment offset within this page. Advance by 12 to read the next batch of screenshots.") })
       .refine(({ id, query }) => Boolean(id) !== Boolean(query), "Provide either id or query."),
@@ -75,9 +75,9 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
         { ...args, inferKind: Boolean(numericId && !kind), itemName: item.name }, readLiveProofs, proofOptions) };
     }, { readOnly: false });
   server.registerTool("get_trade_proof_image", {
-    description: "View one original trade proof screenshot using a Nevos attachment URL returned by get_trade_proofs. Returns the picture as MCP image content.",
+    description: `View one original screenshot from a proofed trade posted in the ${proofOrigin.name}. Pass an attachment URL returned by get_trade_proofs. Returns the picture as MCP image content.`,
     inputSchema: z.strictObject({ attachment: z.string().regex(proofImage)
-      .describe("Nevos attachment URL from get_trade_proofs.") }),
+      .describe("Attachment URL from get_trade_proofs.") }),
     annotations,
   }, async ({ attachment }) => {
     const image = await readLiveProofs.readImage?.(attachment).catch(() => null);
