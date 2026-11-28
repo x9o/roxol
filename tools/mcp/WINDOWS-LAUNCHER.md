@@ -12,12 +12,12 @@ The same hostname works across launcher restarts and PC reboots. If `ROXOL_NGROK
 
 ## After turning on your PC
 
-1. Connect Surfshark if you use it for ChatGPT. Keep your existing Bypasser rule for `node.exe` so Roxol can reach Nevos over your regular connection.
+1. Connect Surfshark if you use it for ChatGPT.
 2. Double-click `start-roxol.bat`. Wait for **ChatGPT MCP URL**. Keep the launcher window open and the PC awake.
 3. In **ChatGPT → Plugins → Roxol**, use the printed URL as the server URL. Include the `/mcp` at the end. If you haven’t connected Roxol before, use **Add custom MCP server**. [Connection settings](README.md#4-connect-in-chatgpt)
 4. In a chat, select **@Roxol** and ask it to get trade proofs for item ID `439945661`.
 
-The launcher uses port `8788` by default and loads the token from the Git-ignored `tools/mcp/.env` through the Roxol server. If you already set up that file, you can start without entering the token again. [Token setup](README.md#trade-proofs)
+The launcher uses port `8788` by default. The Roxol server loads `ROXOL_DISCORD_TOKEN` from the Git-ignored `tools/mcp/.env`. If you saved the credential for the BIA comparison, restart the launcher to use it for MCP proofs. [Token setup](README.md#trade-proofs)
 
 ## Stop or restart
 
@@ -33,4 +33,4 @@ Each new Quick Tunnel gets a new URL. Paste the new address into ChatGPT after a
 | Missing Node, MCP dependencies, or `cloudflared.exe` | Follow [the one-time installation steps](README.md#1-install-once). The launcher finds Cloudflare on your PATH, in `%LOCALAPPDATA%\Roxol\bin`, or in the existing `%TEMP%\roxol-cloudflared` folder. |
 | Missing `ngrok.exe` or an ngrok startup error | Confirm `ngrok version` works in a new terminal, check the saved authtoken, and confirm that `ROXOL_NGROK_HOST` matches the hostname assigned to your account. |
 | ChatGPT can’t connect | Check that the launcher is still open and ChatGPT uses the URL it printed on this run. |
-| The proof result shows `nevos.httpStatus: 403` | Roxol received the request. If `nevos.message` reports a proxy or datacenter network, check the full path of the running `node.exe` against Surfshark Bypasser and check the outgoing route. Compare `instanceId` across localhost, the public URL, and ChatGPT to identify the running server. |
+| The proof result shows `discord.httpStatus: 401` or `403` | Check that `ROXOL_DISCORD_TOKEN` is current and the account can read Rolimon's `value-requests` channel. Restart after updating the credential. Compare `instanceId` across localhost, the public URL, and ChatGPT to identify the running server. |

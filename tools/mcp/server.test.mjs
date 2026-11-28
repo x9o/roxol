@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, rmdir, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, rmdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { tradeProofs } from "./data.mjs";
-import { createFaceAliases, createProofClient, loadProofs, proofRobux } from "./proofs.mjs";
+import { createFaceAliases, createNevosProofClient, loadProofs, proofRobux } from "./proofs.mjs";
+import { createDiscordProofClient } from "./discord-proofs.mjs";
 import { createScreenshotIndex } from "./proof-screenshots.mjs";
 import { createRoxolServer } from "./server.mjs";
 
@@ -15,18 +16,25 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   const biaId = "398674411";
   const biaName = "Black Iron Antlers";
   const biaPostIds = Array.from({ length: 31 }, (_, index) => String(1450000000000000000n + BigInt(index)));
-  let biaResolvedById = false;
   const uaid = "9007199254740993";
   const collectibleInstanceId = "c90b0e8f-45ce-4cb9-9a4c-9f68cce9b3f9";
   const proofToken = "fixture-token";
-  const networkRejection = "Proofs are not available from proxy or datacenter networks.";
   const postId = "1450000000000000000";
   const link = `https://discord.com/channels/415246288779608064/535250426061258753/${postId}`;
-  const attachment = "https://nevos-extension.com/api/proofs/images/123456";
-  const partialAttachment = "https://nevos-extension.com/api/proofs/images/123457";
-  const unavailableAttachment = "https://nevos-extension.com/api/proofs/images/123458";
+  const channelId = "535250426061258753";
+  const newerId = "1450000001000000000";
+  const imageId = "1500000000000000001";
+  const partialId = "1500000000000000002";
+  const unavailableId = "1500000000000000003";
+  const reference = (post, image) => `discord-attachment:${post}:${image}`;
+  const cdnUrl = (image) => `https://cdn.discordapp.com/attachments/${channelId}/${image}/proof.png?ex=mock`;
+  const attachment = reference(postId, imageId);
+  const partialAttachment = reference(newerId, partialId);
+  const unavailableAttachment = reference(newerId, unavailableId);
+  const tradeCaption = "SKOTN / Other Limited\nTrade screenshot";
   const indexDirectory = await mkdtemp(path.join(tmpdir(), "roxol-screenshot-index-"));
   t.after(async () => {
+    await rm(path.join(indexDirectory, `${postId}-discord-${imageId}.json`), { force: true });
     await rm(path.join(indexDirectory, `${postId}-123456.json`), { force: true });
     await rmdir(indexDirectory);
   });
@@ -48,18 +56,22 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
 
   const originalFetch = globalThis.fetch;
   const urls = [];
-  let nevosFailure = null;
+  let discordFailure = null;
   let visionRequests = 0;
   let imageStatus = "completed";
   t.mock.method(globalThis, "fetch", (input, init) => {
     const url = new URL(input instanceof Request ? input.url : input);
     if (url.hostname === "127.0.0.1") return originalFetch(input, init);
     urls.push(url.href);
-    if (url.href === attachment || url.href === partialAttachment) {
-      assert.equal(init.headers["X-Nte-Client"], proofToken);
-      return new Response(Buffer.from("89504e470d0a1a0a", "hex"));
+    if (url.hostname === "cdn.discordapp.com") {
+      assert.equal(init.headers, undefined);
+      assert.equal(init.credentials, "omit");
+      if (url.href === cdnUrl(imageId) || url.href === cdnUrl(partialId)) {
+        return new Response(Buffer.from("89504e470d0a1a0a", "hex"));
+      }
+      assert.equal(url.href, cdnUrl(unavailableId));
+      return Response.json({ ok: true });
     }
-    if (url.href === unavailableAttachment) return Response.json({ ok: true });
     if (url.hostname === "api.openai.com") {
       visionRequests++;
       const request = JSON.parse(init.body);
@@ -80,47 +92,31 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
             robux: { amount: 100, basis: "offered" } },
         }) }] }] });
     }
-    if (url.hostname === "nevos-extension.com") {
-      const proofItem = url.pathname.split("/").at(-1);
-      assert.ok([assetId, biaId, encodeURIComponent(biaName), "9", "10", "44444", "12345"].includes(proofItem));
-      assert.equal(url.search, "");
-      assert.equal(init.method, "POST");
-      assert.equal(init.body, undefined);
-      assert.equal(init.mode, "cors");
+    if (url.hostname === "discord.com") {
+      const term = url.searchParams.get("content");
+      const offset = Number(url.searchParams.get("offset"));
+      assert.equal(url.pathname, "/api/v9/guilds/415246288779608064/messages/search");
+      assert.equal(url.searchParams.get("channel_id"), channelId);
+      assert.equal(init.headers.Authorization, proofToken);
       assert.equal(init.redirect, "error");
-      assert.ok(init.signal instanceof AbortSignal);
-      assert.deepEqual(init.headers, {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "From-Extension": "1",
-        "X-Nte-Client": proofToken,
-        Origin: "chrome-extension://domfhhikblcjiionldboaapeigejijic",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "none",
-      });
-      if (proofItem === biaId || proofItem === encodeURIComponent(biaName)) {
-        if (proofItem === biaId && !biaResolvedById) return Response.json({ count: 0, results: [] });
-        const results = (proofItem === biaId ? biaPostIds.slice(-12) : biaPostIds).map((id) => ({ id }));
-        return Response.json({ item_id: biaId, count: results.length, results });
+      const result = (rows, count = rows.length) => Response.json({ total_results: count,
+        messages: rows.map((row) => [{ channel_id: channelId, hit: true, ...row }]) });
+      if (["BIA", biaName].includes(term)) {
+        const ids = (term === "BIA" ? biaPostIds.toReversed() : biaPostIds.slice(0, 2)).map((id) => ({ id, content: "BIA" }));
+        return result(ids.slice(offset, offset + 25), ids.length);
       }
-      if (nevosFailure === "timeout") throw new DOMException("Timed out", "TimeoutError");
-      if (nevosFailure === "network") throw new TypeError("Fetch failed");
-      if (nevosFailure === "blocked_route") {
-        return Response.json({ error: networkRejection, token: proofToken }, { status: 403 });
-      }
-      if (nevosFailure === "403") return Response.json({ error: proofToken }, { status: 403 });
-      if (nevosFailure === "429") return new Response(null, { status: 429, headers: { "Retry-After": "120" } });
-      if (nevosFailure === "decoy") return Response.json({ ok: true, source: "edge-cache" });
-      if (nevosFailure === "empty" || ["10", "44444", "12345"].includes(proofItem)) {
-        return Response.json({ item_id: proofItem, count: 0, results: [] });
-      }
-      return Response.json({ item_id: Number(proofItem), count: 4, results: [
-        { id: postId, content: "Trade screenshot", attachments: [attachment, "https://example.com/offsite"] },
-        { id: "1450000001000000000", timestamp: 1766000000000, content: "Older duplicate" },
-        { id: "1450000001000000000", timestamp: 1767000000000, attachments: [] },
-      ] });
+      if (discordFailure === "timeout") throw new DOMException("Timed out", "TimeoutError");
+      if (discordFailure === "network") throw new TypeError("Fetch failed");
+      if (discordFailure === "403") return Response.json({ error: proofToken }, { status: 403 });
+      if (discordFailure === "429") return new Response(null, { status: 429, headers: { "Retry-After": "120" } });
+      if (discordFailure === "invalid") return Response.json({ unexpected: true });
+      if (discordFailure === "empty" || ["OL", "Fixture Face"].includes(term)) return result([]);
+      assert.ok(["SKOTN", "Silver King of the Night", "Other Limited"].includes(term), term);
+      return result([
+        { id: postId, content: tradeCaption, attachments: [{ url: cdnUrl(imageId) }, { url: "https://example.com/offsite" }] },
+        { id: newerId, timestamp: "2026-11-22T01:00:00.000Z", content: tradeCaption,
+          attachments: [{ url: cdnUrl(partialId) }, { url: cdnUrl(unavailableId) }] },
+      ]);
     }
     assert.equal(init.credentials, "omit");
     if (url.pathname === "/items/v1/faceassetbundlemap") {
@@ -184,7 +180,7 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   });
 
   const readAliases = createFaceAliases();
-  const readLiveProofs = createProofClient({ ROXOL_PROOFS_TOKEN: proofToken });
+  const readLiveProofs = createDiscordProofClient({ ROXOL_DISCORD_TOKEN: proofToken }, { cacheMs: 0 });
   const screenshotOptions = { env: { ROXOL_PROOF_VISION_KEY: "fixture-vision", ROXOL_PROOF_INDEX_DIR: indexDirectory },
     readAliases, readImage: readLiveProofs.readImage };
   const screenshots = await createScreenshotIndex(screenshotOptions);
@@ -204,6 +200,7 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   }
   assert(tools.every(({ name, annotations }) => annotations.readOnlyHint === (name !== "get_trade_proofs") &&
     annotations.destructiveHint === false));
+  await readLiveProofs({ id: assetId, kind: "asset" });
   const viewProof = (attachment) => client.callTool({ name: "get_trade_proof_image", arguments: { attachment } });
   const image = await viewProof(attachment);
   assert.deepEqual(image.structuredContent, { attachment, status: "ok", mimeType: "image/png" });
@@ -286,11 +283,12 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   assert.equal(urls.length, callsBeforeInvalid);
 
   const biaLookup = { query: "BIA", limit: 30 };
-  const biaSearches = () => urls.filter((url) => url.includes("nevos-extension.com/api/proofs/search/"));
-  const biaSearchById = `https://nevos-extension.com/api/proofs/search/${biaId}`;
-  const biaSearchByName = `https://nevos-extension.com/api/proofs/search/${encodeURIComponent(biaName)}`;
+  const biaSearches = () => urls.filter((url) => url.includes("discord.com/api/")).map((url) => {
+    const params = new URL(url).searchParams;
+    return [params.get("content"), params.get("offset")];
+  });
   const biaFirst = await call("get_trade_proofs", biaLookup);
-  assert.deepEqual(biaSearches().slice(-2), [biaSearchById, biaSearchByName]);
+  assert.deepEqual(biaSearches().slice(-3), [["BIA", "0"], ["BIA", "25"], [biaName, "0"]]);
   assert.deepEqual(biaFirst.records.map(({ postId }) => postId), biaPostIds.slice(1).reverse());
   assert.equal(biaFirst.providerCount, 31);
   assert.equal(biaFirst.hasMore, true);
@@ -298,31 +296,23 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   assert.deepEqual(biaSecond.records.map(({ postId }) => postId), [biaPostIds[0]]);
   assert.equal(biaSecond.hasMore, false);
 
-  biaResolvedById = true;
-  const biaSearchCount = biaSearches().length;
-  const biaLimited = await call("get_trade_proofs", biaLookup);
-  assert.deepEqual(biaSearches().slice(biaSearchCount), [biaSearchById]);
-  assert.equal(biaLimited.records.length, 12);
-  assert.equal(biaLimited.providerCount, 12);
-  assert.equal(biaLimited.hasMore, false);
-
   const proofArgs = { id: assetId };
   const live = await call("get_trade_proofs", { query: " SKOTN ", limit: 1 });
   assert.match(live.instanceId, /^[0-9a-f-]{36}$/);
   assert.deepEqual(live.item, { id: assetId, kind: "asset" });
-  assert.equal(live.evidenceType, "nevos_proof_post");
+  assert.equal(live.evidenceType, "discord_proof_post");
   assert.deepEqual(live.proofOrigin, { name: proofChannelName, url: link.slice(0, link.lastIndexOf("/")) });
-  assert.equal(live.providerCount, 4);
+  assert.equal(live.providerCount, 2);
   assert.equal(live.total, 2);
   assert.equal(live.hasMore, true);
   assert.equal(live.records[0].postId, "1450000001000000000");
-  assert.equal(live.records[0].content, null);
+  assert.equal(live.records[0].content, tradeCaption);
   const older = await call("get_trade_proofs", { ...proofArgs, limit: 1, page: 2 });
   assert.equal(older.hasMore, false);
   assert.equal(older.records[0].postId, postId);
   assert.equal(older.records[0].discordUrl, link);
-  assert.equal(older.records[0].content, "Trade screenshot");
-  assert.deepEqual(older.records[0].attachments, ["https://nevos-extension.com/api/proofs/images/123456"]);
+  assert.equal(older.records[0].content, tradeCaption);
+  assert.deepEqual(older.records[0].attachments, [attachment]);
 
   const parsed = await call("get_trade_proofs", { ...proofArgs, readScreenshots: true, limit: 1, page: 2 });
   const [screenshot] = parsed.records[0].screenshots;
@@ -342,14 +332,14 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   for (const lookup of [{ id: "10" }, { id: "44444" }, { kind: "bundle", id: "12345" },
     { id: "12345" }, { query: "12345" }]) {
     const result = await call("get_trade_proofs", lookup);
-    assert.equal(result.nevos.reason, "empty_proof_response");
+    assert.equal(result.discord.status, "ok");
     assert.equal(result.total, 1);
     assert.deepEqual(result.records[0].screenshots, [screenshot]);
   }
   await call("get_trade_proofs", { ...proofArgs, readScreenshots: true, limit: 1, page: 2 });
   assert.equal(visionRequests, 1);
   imageStatus = "incomplete";
-  const partial = await screenshots.read(parsed.records[0], partialAttachment);
+  const partial = await screenshots.read(live.records[0], partialAttachment);
   assert.equal(partial.status, "incomplete");
   assert.equal(partial.afterFees, undefined);
   assert.deepEqual(screenshots.forPost(postId), [screenshot]);
@@ -357,6 +347,11 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   const restored = await tradeProofs(null, { kind: "asset", id: "44444" }, { page: 1, limit: 1 },
     readLiveProofs, { readAliases: async () => null, screenshots: reloaded });
   assert.deepEqual(restored.records[0].screenshots, [screenshot]);
+  const saved = JSON.parse(await readFile(path.join(indexDirectory, `${postId}-discord-${imageId}.json`), "utf8"));
+  const legacyAttachment = "https://nevos-extension.com/api/proofs/images/123456";
+  await writeFile(path.join(indexDirectory, `${postId}-123456.json`), JSON.stringify({ ...saved, attachment: legacyAttachment }));
+  const migrated = await createScreenshotIndex(screenshotOptions);
+  assert.deepEqual(migrated.forPost(postId), [{ ...screenshot, attachment: legacyAttachment }, screenshot]);
 
   const context = await call("get_trade_context", {
     give: { items: ["SKOTN", { query: "Silver King of the Night", uaid }], robux: 100 },
@@ -415,26 +410,24 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
     assert.equal((await client.callTool({ name: "get_trade_context", arguments: args })).isError, true);
   }
   const beforeInvalidLookups = urls.length;
-  assert.equal((await call("get_trade_proofs", { ...proofArgs, kind: "bundle" })).nevos.status, "unsupported");
+  assert.equal((await call("get_trade_proofs", { ...proofArgs, kind: "bundle" })).discord.reason, "no_item_search_terms");
   assert.equal((await call("get_trade_proofs", { query: "missing item" })).status, "not_found");
   for (const args of [{}, { ...proofArgs, query: "SKOTN" }]) {
     assert.equal((await client.callTool({ name: "get_trade_proofs", arguments: args })).isError, true);
   }
   assert.equal(urls.length, beforeInvalidLookups);
 
-  for (const [failure, reason, status, message] of [
-    ["decoy", "invalid_proof_response", 200], ["empty", "empty_proof_response", 200],
-    ["blocked_route", "http_error", 403, networkRejection],
+  for (const [failure, reason, status] of [
+    ["invalid", "invalid_proof_response", 200], ["empty", undefined, undefined],
     ["403", "http_error", 403], ["network", "request_failed", undefined],
     ["timeout", "timeout", undefined], ["429", "rate_limited", 429],
   ]) {
-    nevosFailure = failure;
+    discordFailure = failure;
     const fallback = await call("get_trade_proofs", proofArgs);
     assert.equal(fallback.instanceId, live.instanceId);
     assert.equal(fallback.evidenceType, "reviewed_screenshot");
-    assert.equal(fallback.nevos.reason, reason);
-    assert.equal(fallback.nevos.httpStatus, status);
-    assert.equal(fallback.nevos.message, message);
+    assert.equal(fallback.discord.reason, reason);
+    assert.equal(fallback.discord.httpStatus, status);
     assert.equal(JSON.stringify(fallback).includes(proofToken), false);
     assert.equal(fallback.total, 1);
     assert.deepEqual(fallback.records[0].robux, [0, null]);
@@ -442,7 +435,7 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   }
   const requestCount = urls.length;
   const beyond = await call("get_trade_proofs", { ...proofArgs, page: 2, limit: 1 });
-  assert.equal(beyond.nevos.reason, "rate_limited");
+  assert.equal(beyond.discord.reason, "rate_limited");
   assert.deepEqual(beyond.records, []);
   assert.equal(urls.length, requestCount);
   const reviewedContext = await call("get_trade_context", {
@@ -451,17 +444,21 @@ test("MCP discovers tools and returns source data, cache hits, and proof coverag
   assert.deepEqual(Object.keys(reviewedContext.proofs), [postId]);
   assert.deepEqual(reviewedContext.proofs[postId].reviewed.robux, [0, null]);
   assert.equal(reviewedContext.items["asset:9"].proofs.postIds[0], postId);
-  assert.equal(reviewedContext.sources[reviewedContext.items["asset:9"].proofs.nevos].httpStatus, 429);
+  assert.equal(reviewedContext.sources[reviewedContext.items["asset:9"].proofs.discord].httpStatus, 429);
   assert.equal((await client.callTool({ name: "get_item_stats", arguments: { id: "https://example.com" } })).isError, true);
   assert.equal((await originalFetch(endpoint, { method: "POST", headers: { Origin: "https://example.com" } })).status, 403);
 });
 
-test("MCP retries an empty legacy face lookup with its mapped Nevos bundle ID", async (t) => {
+test("MCP retries an empty legacy face lookup with its mapped bundle name in Discord", async (t) => {
   const legacyId = "2409285794";
   const bundleId = "105919952545574";
   const postId = "1575118416581230723";
-  const content = "SKOTN,PV/YUM";
-  const attachments = ["https://nevos-extension.com/api/proofs/images/1575118416229175408"];
+  const legacyName = "Legacy Fixture Face";
+  const bundleName = "Dynamic Fixture Head";
+  const content = `${legacyName} / ${bundleName}`;
+  const attachmentId = "1575118416229175408";
+  const attachment = `discord-attachment:${postId}:${attachmentId}`;
+  const urlForImage = `https://cdn.discordapp.com/attachments/535250426061258753/${attachmentId}/proof.png`;
   const lookups = [];
   let legacyHasProof = false;
   const originalFetch = globalThis.fetch;
@@ -471,17 +468,22 @@ test("MCP retries an empty legacy face lookup with its mapped Nevos bundle ID", 
     if (url.hostname === "api.rolimons.com" && url.pathname === "/items/v1/faceassetbundlemap") {
       return Response.json({ face_asset_bundle_map: { [legacyId]: bundleId } });
     }
-    const id = url.pathname.split("/").at(-1);
-    assert.equal(url.origin, "https://nevos-extension.com");
-    assert.equal(url.pathname, `/api/proofs/search/${id}`);
-    assert.equal(init.method, "POST");
-    assert.ok([legacyId, bundleId].includes(id));
-    lookups.push(id);
-    const results = id === bundleId || legacyHasProof ? [{ id: postId, content, attachments }] : [];
-    return Response.json({ item_id: id, count: results.length, results });
+    assert.equal(url.origin, "https://discord.com");
+    const term = url.searchParams.get("content");
+    assert.ok([legacyName, bundleName].includes(term));
+    lookups.push(term);
+    const messages = term === bundleName || legacyHasProof ? [[{ id: postId, content, hit: true,
+      channel_id: "535250426061258753", attachments: [{ url: urlForImage }] }]] : [];
+    return Response.json({ total_results: messages.length, messages });
   });
   const readAliases = createFaceAliases();
-  const readLiveProofs = createProofClient({ ROXOL_PROOFS_TOKEN: "fixture-token" });
+  const readLiveProofs = createDiscordProofClient({ ROXOL_DISCORD_TOKEN: "fixture-token" }, {
+    cacheMs: 0,
+    readItemFeed: async () => new Map([
+      [`asset:${legacyId}`, { name: legacyName }],
+      [`bundle:${bundleId}`, { name: bundleName }],
+    ]),
+  });
   const screenshots = await createScreenshotIndex({ env: {}, readImage: readLiveProofs.readImage, readAliases });
   const server = createRoxolServer({ readAliases, readLiveProofs, screenshots }).listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
@@ -491,11 +493,11 @@ test("MCP retries an empty legacy face lookup with its mapped Nevos bundle ID", 
   t.after(() => client.close());
 
   for (const [lookup, kind, expectedRequests] of [
-    [{ id: legacyId }, "asset", [legacyId, bundleId]],
-    [{ query: bundleId }, "bundle", [legacyId, bundleId]],
-    [{ id: bundleId }, "bundle", [legacyId, bundleId]],
-    [{ id: legacyId, kind: "asset" }, "asset", [legacyId, bundleId]],
-    [{ query: legacyId }, "asset", [legacyId]],
+    [{ id: legacyId }, "asset", [legacyName, bundleName]],
+    [{ query: bundleId }, "bundle", [legacyName, bundleName]],
+    [{ id: bundleId }, "bundle", [legacyName, bundleName]],
+    [{ id: legacyId, kind: "asset" }, "asset", [legacyName, bundleName]],
+    [{ query: legacyId }, "asset", [legacyName]],
   ]) {
     legacyHasProof = expectedRequests.length === 1;
     lookups.length = 0;
@@ -505,13 +507,53 @@ test("MCP retries an empty legacy face lookup with its mapped Nevos bundle ID", 
     assert.deepEqual(lookups, expectedRequests);
     assert.equal(result.status, "ok");
     assert.deepEqual(result.item, { id: lookup.id ?? lookup.query, kind });
-    assert.equal(result.source, `https://nevos-extension.com/api/proofs/search/${expectedRequests.at(-1)}`);
+    assert.equal(result.source, "https://discord.com/channels/415246288779608064/535250426061258753");
     const [record] = result.records;
     assert.equal(record.postId, postId);
     assert.equal(record.content, content);
-    assert.deepEqual(record.attachments, attachments);
+    assert.deepEqual(record.attachments, [attachment]);
     assert.equal(record.screenshots, undefined);
   }
+});
+
+test("Discord proof images refresh a signed URL without changing its attachment reference", async () => {
+  const channelId = "535250426061258753";
+  const postId = "1575118416581230723";
+  const attachmentId = "1575118416229175408";
+  const imageUrl = `https://cdn.discordapp.com/attachments/${channelId}/${attachmentId}/proof.png`;
+  let searches = 0;
+  const downloaded = [];
+  const request = async (input, options) => {
+    const url = new URL(input);
+    if (url.hostname === "discord.com") {
+      assert.equal(options.headers.Authorization, "fixture-token");
+      searches++;
+      if (searches === 1) return new Response(null, { status: 500 });
+      return Response.json({ total_results: 2, messages: [
+        [{ id: postId, channel_id: channelId, content: "Fixture Item / Other",
+          attachments: [{ url: `${imageUrl}?sig=${searches}` }] }],
+        [{ id: "1575118416581230724", channel_id: channelId, content: "Fixture Items / Other" }],
+      ] });
+    }
+    assert.equal(options.headers, undefined);
+    downloaded.push(url.href);
+    return url.search === "?sig=2" ? new Response(null, { status: 403 })
+      : new Response(Buffer.from("89504e470d0a1a0a", "hex"));
+  };
+  const readProofs = createDiscordProofClient({ ROXOL_DISCORD_TOKEN: "fixture-token" }, {
+    request, readItemFeed: async () => new Map([["asset:1", { name: "Fixture Item" }]]),
+  });
+  const item = { kind: "asset", id: "1" };
+  const result = await readProofs(item);
+  assert.equal(result.partial, false);
+  assert.equal(result.count, 1);
+  const [reference] = result.records[0].attachments;
+  assert.equal(reference, `discord-attachment:${postId}:${attachmentId}`);
+  assert.equal(await readProofs.readImage(imageUrl), null);
+  assert.equal((await readProofs.readImage(reference)).mime, "png");
+  assert.deepEqual(downloaded, [`${imageUrl}?sig=2`, `${imageUrl}?sig=3`]);
+  assert.equal((await readProofs(item)).records[0].attachments[0], reference);
+  assert.equal(searches, 3);
 });
 
 test("proof Robux uses separate screenshot item values and leaves unclear fee math unknown", () => {
@@ -542,7 +584,7 @@ test("proof Robux uses separate screenshot item values and leaves unclear fee ma
 });
 
 test("Nevos proof requests use configured URL and header overrides", async (t) => {
-  const readLiveProofs = createProofClient({
+  const readLiveProofs = createNevosProofClient({
     ROXOL_PROOFS_URL: "https://proofs.example/search/",
     ROXOL_PROOFS_ACCEPT: "application/*",
     ROXOL_PROOFS_CONTENT_TYPE: "application/json; charset=UTF-8",
@@ -574,16 +616,16 @@ test("Nevos proof requests use configured URL and header overrides", async (t) =
   });
 });
 
-test("Missing Nevos credentials skip live requests and preserve the reviewed fallback", async (t) => {
+test("Missing Discord credentials skip live requests and preserve the reviewed fallback", async (t) => {
   const fetch = t.mock.method(globalThis, "fetch", () => {
     throw new Error("Unexpected upstream request");
   });
   const item = { id: "439945661", kind: "asset" };
   const record = { postId: "1450000000000000000", baskets: [[item], []] };
   const reviewed = { loadedAt: Date.now(), records: [record], byItem: new Map([["asset:439945661", [record]]]) };
-  const result = await tradeProofs(reviewed, item, { page: 1, limit: 20 }, createProofClient({}));
+  const result = await tradeProofs(reviewed, item, { page: 1, limit: 20 }, createDiscordProofClient({}));
   assert.equal(result.evidenceType, "reviewed_screenshot");
-  assert.equal(result.nevos.reason, "no_nevos_client_token");
+  assert.equal(result.discord.reason, "no_discord_token");
   assert.deepEqual(result.records, [{ ...record, discordUrl: `${result.proofOrigin.url}/${record.postId}` }]);
   assert.equal(fetch.mock.callCount(), 0);
 });

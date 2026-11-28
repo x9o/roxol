@@ -283,7 +283,7 @@ function pageOfProofs(records, page, limit) {
   return pageOf(Array.from(unique.values()), page, limit);
 }
 
-export async function tradeProofs(proofs, item, { page, limit, readScreenshots, screenshotOffset = 0, inferKind, itemName }, readLiveProofs,
+export async function tradeProofs(proofs, item, { page, limit, readScreenshots, screenshotOffset = 0, inferKind, itemName, itemAcronym }, readLiveProofs,
   { readAliases, screenshots } = {}) {
   const needsAliases = inferKind || item.kind === "bundle" || proofs?.records.length || screenshots?.byItem.size;
   let aliases = needsAliases ? await readAliases?.() : null;
@@ -298,17 +298,18 @@ export async function tradeProofs(proofs, item, { page, limit, readScreenshots, 
   }
   let equivalents = aliases?.get(keyOf(item)) ?? [];
   const primary = item.kind === "bundle" && equivalents.length === 1 ? equivalents[0] : item;
-  let nevos = await readLiveProofs(primary, { itemName: primary === item ? itemName : undefined });
-  if (nevos.status !== "ok") {
+  const lookup = (target) => readLiveProofs(target, target === item ? { itemName, itemAcronym } : {});
+  let discord = await lookup(primary);
+  if (!discord.records?.length && (discord.status === "ok" || discord.reason === "no_item_search_terms")) {
     if (!needsAliases) {
       aliases = await readAliases?.();
       equivalents = aliases?.get(keyOf(item)) ?? [];
     }
     const bundle = item.kind === "bundle" && equivalents.length ? item :
       equivalents.find(({ kind }) => kind === "bundle");
-    if (bundle) {
-      const fallback = await readLiveProofs(bundle, { allowBundle: true, itemName: bundle === item ? itemName : undefined });
-      if (fallback.status === "ok") nevos = fallback;
+    if (bundle && bundle !== primary) {
+      const fallback = await lookup(bundle);
+      if (fallback.records?.length || discord.status !== "ok" && fallback.status === "ok") discord = fallback;
     }
   }
   const keys = [item, ...equivalents].map(keyOf);
@@ -320,8 +321,9 @@ export async function tradeProofs(proofs, item, { page, limit, readScreenshots, 
   }
   const recentFirst = (a, b) => (b.postedAt ?? "").localeCompare(a.postedAt ?? "") || b.postId.localeCompare(a.postId);
 
+  const { records: liveRecords = [], count: providerCount, ...provider } = discord;
   let result;
-  if (nevos.status === "ok") {
+  if (liveRecords.length || discord.status === "ok" && !reviewed.length && !indexed.size) {
     const posts = new Map();
     for (const record of reviewed) {
       if (!posts.has(record.postId)) posts.set(record.postId, { postedAt: record.completedAtReported, ...record });
@@ -329,25 +331,26 @@ export async function tradeProofs(proofs, item, { page, limit, readScreenshots, 
     for (const record of indexed.values()) {
       if (!posts.has(record.postId)) posts.set(record.postId, record);
     }
-    for (const record of nevos.records) {
+    for (const record of liveRecords) {
       if (posts.get(record.postId)?.attachments) continue;
       const reviewed = posts.get(record.postId);
       posts.set(record.postId, { ...record, ...(reviewed?.baskets ? { reviewed } : {}) });
     }
-    result = { item, ...observed(nevos.source, Date.now()), evidenceType: "nevos_proof_post",
-      providerCount: count(nevos.count), ...pageOfProofs([...posts.values()].sort(recentFirst), page, limit) };
+    result = { item, ...observed(discord.source, Date.parse(discord.checkedAt) || Date.now()), evidenceType: "discord_proof_post",
+      providerCount: count(providerCount), ...pageOfProofs([...posts.values()].sort(recentFirst), page, limit) };
   } else {
     const source = proofOrigin.url;
     if (!proofs && !indexed.size) {
-      return { item, source, proofOrigin, status: "unavailable", reason: "no_reviewed_public_proof_export_configured", nevos };
+      return { item, source, proofOrigin, status: "unavailable", reason: discord.reason, discord: provider,
+        ...(provider.partial ? { partial: true } : {}) };
     }
     const reviewedPosts = new Set(reviewed.map(({ postId }) => postId));
     const records = [...reviewed, ...[...indexed.values()].filter(({ postId }) => !reviewedPosts.has(postId))]
       .sort((a, b) => recentFirst({ ...a, postedAt: a.completedAtReported ?? a.postedAt },
         { ...b, postedAt: b.completedAtReported ?? b.postedAt }));
     result = { item, ...observed(source, proofs?.loadedAt ?? Date.now()),
-      evidenceType: reviewed.length || !indexed.size ? "reviewed_screenshot" : "nevos_screenshot",
-      nevos, ...pageOfProofs(records, page, limit) };
+      evidenceType: reviewed.length || !indexed.size ? "reviewed_screenshot" : "indexed_screenshot",
+      ...pageOfProofs(records, page, limit) };
   }
 
   let position = 0;
@@ -364,5 +367,5 @@ export async function tradeProofs(proofs, item, { page, limit, readScreenshots, 
     return { ...record, discordUrl: `${proofOrigin.url}/${record.postId}`, ...(evidence.length ? { screenshots: evidence } : {}),
       ...(readScreenshots && unprocessed ? { moreScreenshots: true } : {}) };
   }));
-  return { ...result, proofOrigin };
+  return { ...result, proofOrigin, discord: provider, ...(provider.partial ? { partial: true } : {}) };
 }

@@ -39,8 +39,8 @@ function sourceIndex() {
   const indexed = new Map();
   return {
     sources,
-    ref({ source: url, status, checkedAt, httpStatus, reason, message }) {
-      const metadata = { url, status, checkedAt: checkedAt ?? undefined, httpStatus, reason, message };
+    ref({ source: url, status, checkedAt, httpStatus, reason, message, partial }) {
+      const metadata = { url, status, checkedAt: checkedAt ?? undefined, httpStatus, reason, message, partial };
       const key = JSON.stringify(metadata);
       if (!indexed.has(key)) {
         indexed.set(key, sources.length);
@@ -155,9 +155,9 @@ function marketSample({ records, total, hasMore, ...metadata }, ref) {
 function addProofs(result, proofs, ref) {
   for (const row of result.records ?? []) {
     const post = proofs[row.postId] ??= { discordUrl: row.discordUrl };
-    if (row.attachments && !post.nevos) {
+    if (row.attachments && !post.discord) {
       const { postedAt, content, attachments } = row;
-      post.nevos = { postedAt, ...(content ? { content: content.slice(0, 1200) } : {}),
+      post.discord = { postedAt, ...(content ? { content: content.slice(0, 1200) } : {}),
         ...(content?.length > 1200 ? { contentTruncated: true } : {}),
         ...(attachments.length ? { attachments } : {}) };
     }
@@ -170,7 +170,7 @@ function addProofs(result, proofs, ref) {
   }
   return {
     source: ref(result),
-    ...(result.nevos ? { nevos: ref(result.nevos) } : {}),
+    ...(result.discord ? { discord: ref(result.discord) } : {}),
     ...(result.records ? { postIds: result.records.map(({ postId }) => postId), hasMore: result.hasMore } : {}),
   };
 }

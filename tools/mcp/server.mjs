@@ -6,7 +6,8 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import { copyHistory, findItems, itemStats, history, tradeObservations, tradeProofs } from "./data.mjs";
 import targets from "../../extension/shared/market_targets.js";
-import { createFaceAliases, createProofClient, loadProofs, proofImage, proofOrigin } from "./proofs.mjs";
+import { createFaceAliases, loadProofs, proofAttachment, proofOrigin } from "./proofs.mjs";
+import { createDiscordProofClient } from "./discord-proofs.mjs";
 import { createScreenshotIndex } from "./proof-screenshots.mjs";
 import { tradeContext, tradeContextInput } from "./trade-context.mjs";
 import { searchLimiteds, searchLimitedsInput } from "./search-limiteds.mjs";
@@ -25,7 +26,7 @@ const annotations = { readOnlyHint: true, destructiveHint: false, idempotentHint
 function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
   const server = new McpServer({ name: "roxol-market-data", version: "1.0.0" }, {
     instructions: "Find item IDs with find_items. Source statuses and timestamps describe each provider independently. " +
-      `RoUtility trades are ownership-transfer observations. In user-facing answers, refer to user-reported proof posts as proofed trades from the ${proofOrigin.name}. Use discordUrl to cite original posts. Nevos is the retrieval provider. ` +
+      `RoUtility trades are ownership-transfer observations. In user-facing answers, refer to user-reported proof posts as proofed trades from the ${proofOrigin.name}. Use discordUrl to cite original posts. ` +
       "Use get_trade_proof_image to view an attachment from get_trade_proofs. The optional readScreenshots flag transcribes and indexes both sides when server-side vision is configured. Label proof W/L by its screenshot price field and leave any null fee-adjusted result unknown. " +
       "Prices and history use Robux unless a field explicitly names another currency.",
   });
@@ -54,7 +55,7 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
     z.strictObject({ uaid: id.optional(), collectibleInstanceId: collectibleInstanceId.optional(), page, limit })
       .refine(({ uaid, collectibleInstanceId }) => Boolean(uaid) !== Boolean(collectibleInstanceId),
         "Provide either uaid or collectibleInstanceId."), copyHistory);
-  register("get_trade_proofs", `Find proofed trades from the ${proofOrigin.name} by item ID, name, or acronym, including indexed screenshots and equivalent legacy face or bundle IDs. Credit the channel and cite original posts using discordUrl. Nevos is the retrieval provider. ` +
+  register("get_trade_proofs", `Find proofed trades from the ${proofOrigin.name} by item ID, name, or acronym, including indexed screenshots and equivalent legacy face or bundle IDs. Credit the channel and cite original posts using discordUrl. ` +
     "For practical overpay analysis, 3–5 recent, independent and comparable trade proofs with consistent overpays are generally sufficient for moderate confidence. " +
     "Prioritise recency, trade direction and the current Value cycle over sample size. " +
     "Do not demand unnecessarily large samples or treat limited historical coverage as an analysis blocker when sufficient relevant evidence is available.",
@@ -72,17 +73,16 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
         if (!item) return { instanceId, query, status: search.status === "ok" ? "not_found" : search.status, sources: search.sources };
       }
       return { instanceId, ...await tradeProofs(proofs, { id: item.id, kind: item.kind },
-        { ...args, inferKind: Boolean(numericId && !kind), itemName: item.name }, readLiveProofs, proofOptions) };
+        { ...args, inferKind: Boolean(numericId && !kind), itemName: item.name, itemAcronym: item.acronym }, readLiveProofs, proofOptions) };
     }, { readOnly: false });
   server.registerTool("get_trade_proof_image", {
-    description: `View one original screenshot from a proofed trade posted in the ${proofOrigin.name}. Pass an attachment URL returned by get_trade_proofs. Returns the picture as MCP image content.`,
-    inputSchema: z.strictObject({ attachment: z.string().regex(proofImage)
-      .describe("Attachment URL from get_trade_proofs.") }),
+    description: `View one original screenshot from a proofed trade posted in the ${proofOrigin.name}. Pass an attachment reference returned by get_trade_proofs. Returns the picture as MCP image content.`,
+    inputSchema: z.strictObject({ attachment: proofAttachment.describe("Attachment reference from get_trade_proofs.") }),
     annotations,
   }, async ({ attachment }) => {
     const image = await readLiveProofs.readImage?.(attachment).catch(() => null);
     if (!image) {
-      return { content: [{ type: "text", text: "Nevos did not return a readable image for this attachment." }],
+      return { content: [{ type: "text", text: "Roxol could not retrieve this image. Run get_trade_proofs again to refresh the attachment reference and try again." }],
         structuredContent: { attachment, status: "unavailable" } };
     }
 
@@ -94,7 +94,7 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
 }
 
 export function createRoxolServer({ proofs = null, publicHost, proofEnv = process.env,
-  readLiveProofs = createProofClient(proofEnv), readAliases = createFaceAliases(), screenshots } = {}) {
+  readLiveProofs = createDiscordProofClient(proofEnv), readAliases = createFaceAliases(), screenshots } = {}) {
   const instanceId = randomUUID();
   const proofOptions = { readAliases, screenshots };
   const allowedHosts = new Set(["127.0.0.1", "localhost", publicHost?.toLowerCase()].filter(Boolean));
@@ -140,7 +140,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const port = Number(process.env.PORT ?? 8787);
   const host = process.env.ROXOL_MCP_BIND ?? "127.0.0.1";
   const publicHost = process.env.ROXOL_MCP_PUBLIC_HOST;
-  const readLiveProofs = createProofClient();
+  const readLiveProofs = createDiscordProofClient();
   const readAliases = createFaceAliases();
   const [proofs, screenshots] = await Promise.all([
     loadProofs(process.env.ROXOL_MCP_PUBLIC_PROOFS),

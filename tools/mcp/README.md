@@ -91,7 +91,7 @@ For a stable URL, use a named tunnel pointing at the same loopback address. For 
 | `get_market_history` | Choose `rolimons_sales` for tracked sales with pre- and post-sale RAP, `rolimons_value_changes` for dated Value changes, or `roblox_resale` for daily prices, volume, and current Roblox resale RAP. |
 | `get_trade_observations` | One RoUtility page of 20 records, with both baskets, copy identifiers where published, observed timestamps, RAP, Value and the provider's `inferred` flag. These are ownership-transfer observations with unknown trade completion and side payments. |
 | `get_copy_history` | RoUtility's tracked ownership observations for one copy by UAID or collectible instance UUID. Returns timestamps and available public owner identifiers, newest first. |
-| `get_trade_proofs` | Proofed trades from the `value-requests` channel in Rolimon's official Discord by ID, item name, or acronym. Roxol retrieves live posts through Nevos and includes reviewed exports and indexed screenshots when available. Set `readScreenshots` to transcribe new attachments. |
+| `get_trade_proofs` | Proofed trades from the `value-requests` channel in Rolimon's official Discord by ID, item name, or acronym. Roxol searches Discord directly and includes reviewed exports and indexed screenshots when available. Set `readScreenshots` to transcribe new attachments. |
 | `get_trade_proof_image` | One original trade proof screenshot, returned as MCP image content for clients that support it. |
 
 Numeric IDs are decimal strings. Item tools default to `asset` and also accept `bundle` where a provider supports it. History and proof pages start at 1, default to 20 records, and accept up to 50 per page. Roblox daily history covers up to 180 returned days. Rolimon's may report more tracked sales than its page includes. Live provider data can shift between page requests. Amounts are in Robux except for fields that explicitly name another currency. A JSON `null` marks an unreported field. Per-source statuses distinguish absent items and unsupported coverage from upstream failures.
@@ -152,53 +152,40 @@ Use the observations to review patterns such as closely spaced ownership changes
 
 ### Trade proofs
 
-Pass either `{"id":"439945661"}` or `{"query":"BIA","limit":30}` to `get_trade_proofs`. Text queries use the same ranked lookup as `find_items`. Roxol searches Nevos by the resolved ID first and can retry by the canonical name when the ID search fails or returns an unresolved empty result. Each request sends an empty POST with a 20-second timeout.
+Pass either `{"id":"439945661"}` or `{"query":"BIA","limit":30}` to `get_trade_proofs`. Text queries use the same ranked lookup as `find_items`. Roxol uses the resolved item's acronym and canonical name to search Discord. It reads up to four pages of 25 result groups per term within a 20-second search budget and keeps posts whose original caption mentions the item. It retries a transient server error once.
 
 For practical overpay analysis, 3–5 recent, independent and comparable trade proofs with consistent overpays are generally sufficient for moderate confidence. Prioritise recency, trade direction and the current Value cycle over sample size. Do not demand unnecessarily large samples or treat limited historical coverage as an analysis blocker when sufficient relevant evidence is available.
 
-Numeric IDs default to assets. Roxol also recognizes bundle IDs from Rolimon's face-to-bundle mapping and the screenshot index. Provide `kind` explicitly to choose the ID type. For a mapped face with a single legacy asset ID, Roxol checks that ID first and retries Nevos with the bundle ID if the first lookup returns no usable posts. This works with screenshot reading disabled.
+Numeric IDs default to assets. Roxol also recognizes bundle IDs from Rolimon's face-to-bundle mapping and the screenshot index. Provide `kind` explicitly to choose the ID type. For a mapped face with a single legacy asset ID, Roxol searches by the legacy item first and can retry with the bundle's name or acronym when the first search returns no matching posts. This works with screenshot reading disabled.
 
-`get_trade_proofs` and `get_trade_context` identify the `value-requests` channel in Rolimon's official Discord as `proofOrigin`. Each post includes a `discordUrl` to cite the original user-reported evidence. Nevos provides retrieval for live posts. [Rolimon's `value-requests` channel](https://discord.com/channels/415246288779608064/535250426061258753)
+`get_trade_proofs` and `get_trade_context` identify the `value-requests` channel in Rolimon's official Discord as `proofOrigin`. Each post includes a `discordUrl` to cite the original user-reported evidence. In trade context, `proofs[postId].discord` contains the live caption and attachment references. [Rolimon's `value-requests` channel](https://discord.com/channels/415246288779608064/535250426061258753)
 
-Roxol paginates the collected posts by unique post ID and retains the timestamp, caption, and image references. `limit` sets the maximum posts per MCP page, up to 50. `providerCount` reports the count from the Nevos response. The Nevos extension makes a single successful item search and has no upstream paging mechanism. [Nevos item search source](https://github.com/NevoQF/nevos-trading-extension/blob/f373cf638bb78ad57b7923fafbb18905b51c926b/extension/background/background.js#L2803-L2935)
+Roxol paginates the collected posts by unique post ID and retains the timestamp, caption, and image references. `limit` sets the maximum posts per MCP page, up to 50. `providerCount` counts unique matching Discord posts collected before reviewed and indexed evidence is merged. `discord.searches` reports raw hits and pages fetched for each term. `partial: true` means the search reached its page cap or encountered an upstream failure. `hasMore` refers to additional MCP pages in the collected sample.
 
-To view a screenshot, take an attachment URL from `get_trade_proofs` and pass it as `attachment` to `get_trade_proof_image`. Roxol uses its existing Nevos client token to fetch the image and returns it as an MCP image. It requires no Discord bot, Discord session, or vision key. If Nevos returns JSON or the picture cannot be downloaded, the tool reports `unavailable`. After updating and restarting Roxol, refresh the connector's tool list if the new tool is missing.
+To view a screenshot, take an attachment reference from `get_trade_proofs` and pass it as `attachment` to `get_trade_proof_image`. Roxol downloads the screenshot from Discord's CDN and can repeat the bounded search to refresh an expired URL. If the reference is unavailable after a restart, run the item proof lookup again first. Screenshot viewing requires the configured Discord credential for proof search. A vision key is optional and only used for transcription.
 
 To transcribe and index screenshots, call `get_trade_proofs` with `{"query":"SKOTN","limit":3,"readScreenshots":true}`. Set `ROXOL_PROOF_VISION_KEY` to an OpenAI API key in the server's environment or the Git-ignored `tools/mcp/.env`, then restart Roxol. This option sends the selected public trade proof images to the OpenAI Responses API and can incur API usage charges. `ROXOL_PROOF_VISION_MODEL` defaults to `gpt-4.1-mini` and accepts an image-capable model that supports structured outputs. Roxol processes up to 12 distinct attachments on the requested page per call. If a record shows `moreScreenshots`, advance `screenshotOffset` by 12 to select the next group on the same page. [OpenAI image input documentation](https://developers.openai.com/api/docs/guides/images-vision)
 
 - `screenshots[].baskets` keeps both offers in top-to-bottom or left-to-right image order, with each item row, quantity, and any legible serial, displayed price, RAP, or assigned Value. `itemTotals` holds explicitly shown item-only totals where available.
 - `priceBasis: "screenshot"` identifies the source of the W/L. `netDisplayedPrice` uses the screenshot's native item prices, while `netRap` and `netValue` use any RAP or assigned Value shown in the screenshot. Each uses the matching item-only totals or the complete sum of item rows, then adds incoming credited Robux and subtracts outgoing gross Robux. A combined total with an unclear fee basis leaves fee-adjusted W/L `null`.
 - `screenshots[].afterFees.robux` gives each side's displayed amount, fee basis, gross offered amount, and credited amount where known. Roxol applies Roblox's 30% fee and rounds to the nearest Robux. An explicitly credited amount is used directly. If exactly one gross amount rounds to the displayed credit, Roxol marks that estimate with `offeredInferred: true`. `netRobux` reports each side's net Robux, while `creditedDifference` compares side B's credit with side A's credit. [Roblox trading guide](https://en.help.roblox.com/hc/en-us/articles/203313310-Trading-on-Roblox)
-- Completed screenshots with resolved baskets are saved under both sides' item IDs. The index includes legacy face and dynamic-head bundle equivalents from Rolimon's mapping. Aliases point to the same item in the basket. Incomplete reads return available rows and payment details for inspection. Each successful reading retains its Nevos attachment URL and image hash.
+- Completed screenshots with resolved baskets are saved under both sides' item IDs. The index includes legacy face and dynamic-head bundle equivalents from Rolimon's mapping. Aliases point to the same item in the basket. Incomplete reads return available rows and payment details for inspection. Each successful reading retains its attachment reference and image hash. Existing Nevos transcriptions remain indexed. To view the original image for one of those posts, use a current Discord attachment reference from a live lookup.
 - The index defaults to `tools/mcp/.proof-screenshots/`, a Git-ignored directory. Set `ROXOL_PROOF_INDEX_DIR` to use a different location. Roxol reloads the saved readings on startup and returns them in later proof and trade-context calls. It reads each indexed attachment once and stores the transcription and evidence references locally.
 
-To verify a deployment, call `get_trade_proofs` for the same ID against localhost, the public tunnel, and ChatGPT. A matching `instanceId` confirms that the results came from the same running Roxol server. It changes when the server restarts. When Roxol returns HTTP 200 with `nevos.httpStatus: 403`, the proof request reached Roxol and Nevos refused the upstream call. If the Nevos response contains its known proxy or datacenter rejection, Roxol includes that sentence in `nevos.message`. Roxol exposes only that allowlisted message from upstream error bodies.
+To verify a deployment, call `get_trade_proofs` for the same ID against localhost, the public tunnel, and ChatGPT. A matching `instanceId` confirms that the results came from the same running Roxol server. It changes when the server restarts. A `discord.httpStatus` of 401 or 403 indicates that Discord refused the search. Check the credential and channel access.
 
-Roxol reads the proof request settings at startup. Set `ROXOL_PROOFS_TOKEN` to a valid Nevos client token in the server's environment or `tools/mcp/.env`. For a PowerShell session, you can enter the token without echoing it or putting it in command history.
+Roxol reads `ROXOL_DISCORD_TOKEN` at startup from the server environment or Git-ignored `tools/mcp/.env`. Use an authorized Discord account that can read the source channel. If you saved the credential for the BIA comparison, restart Roxol with your usual launcher. For a one-time PowerShell session, enter the credential at the hidden prompt.
 
 ```powershell
-$env:ROXOL_PROOFS_TOKEN = [System.Net.NetworkCredential]::new('', (Read-Host 'Nevos client token' -AsSecureString)).Password
+$env:ROXOL_DISCORD_TOKEN = [System.Net.NetworkCredential]::new('', (Read-Host 'Discord credential' -AsSecureString)).Password
 npm.cmd start --prefix tools/mcp
 ```
 
-The endpoint and other headers have built-in defaults for unset or empty values. An unset or blank token makes Roxol use the reviewed export, when configured, and report `no_nevos_client_token` for the live source.
+The optional BIA comparison still uses `ROXOL_PROOFS_TOKEN` for its Nevos baseline. [Provider comparison](../overpay/README.md#compare-discord-and-nevos-proof-coverage)
 
-| Environment variable | Request setting |
-| --- | --- |
-| `ROXOL_PROOFS_URL` | Base URL, default `https://nevos-extension.com/api/proofs/search` |
-| `ROXOL_PROOFS_TOKEN` | `X-Nte-Client`, required for live proofs |
-| `ROXOL_PROOFS_ORIGIN` | `Origin` |
-| `ROXOL_PROOFS_USER_AGENT` | `User-Agent` |
-| `ROXOL_PROOFS_ACCEPT` | `Accept`, default `application/json` |
-| `ROXOL_PROOFS_CONTENT_TYPE` | `Content-Type`, default `application/json` |
-| `ROXOL_PROOFS_FROM_EXTENSION` | `From-Extension`, default `1` |
-| `ROXOL_PROOFS_SEC_FETCH_DEST` | `Sec-Fetch-Dest`, default `empty` |
-| `ROXOL_PROOFS_SEC_FETCH_MODE` | Fetch mode and `Sec-Fetch-Mode`, default `cors` |
-| `ROXOL_PROOFS_SEC_FETCH_SITE` | `Sec-Fetch-Site`, default `none` |
+Set `ROXOL_MCP_PUBLIC_PROOFS` to a JSON file with a `pricedTrades` array to include reviewed proofs for both sides' items alongside live results and indexed screenshots. Roxol continues to serve local matches on request failures, timeouts, empty results, and invalid responses. An unset Discord credential reports `no_discord_token`. HTTP 429 triggers a cooldown using `Retry-After` or 60 seconds if the header is missing or invalid. See `discord` for live search status even when local evidence is available.
 
-Set `ROXOL_MCP_PUBLIC_PROOFS` to a JSON file with a `pricedTrades` array to include reviewed proofs for both sides' items alongside live results and indexed screenshots. Roxol continues to serve local matches on request failures, timeouts, empty results, and invalid response bodies, including the `edge-cache` response. HTTP 429 triggers a cooldown using `Retry-After` or 60 seconds if the header is missing or invalid. The response includes the Nevos status when live results are unavailable. If there are no local matches, a configured export returns an empty page and a lookup without an export reports `unavailable`.
-
-Use selected entries from the existing [Roxol proof review export](../overpay/README.md#review-completed-proofs). The MCP loads the file at startup, skips conflicting entries, and returns dated baskets, reported Robux, and evidence references. Discord may require a session to open an evidence link. Restart the server after updating the export or client token.
+Use selected entries from the existing [Roxol proof review export](../overpay/README.md#review-completed-proofs). The MCP loads the file at startup, skips conflicting entries, and returns dated baskets, reported Robux, and evidence references. Discord may require a session to open an evidence link. Restart the server after updating the export or Discord credential.
 
 ## Verification
 
@@ -207,11 +194,13 @@ npm test --prefix tools/mcp
 node --test tools/overpay/*.test.mjs
 ```
 
-The MCP integration test uses an HTTP client and server with fixture provider responses and a reviewed proof fixture. It verifies screenshot extraction, both baskets, fee math, lookups by either side and face equivalents, index reload, acronym resolution, and proof pagination. It also covers empty results, an `edge-cache` response, a network failure, HTTP 403, a timeout, and HTTP 429. Unit tests check request overrides, missing credentials, and amounts with different fee bases. The initial live Node POST for asset ID `439945661` returned HTTP 200 with 12 SKOTN proof records. Later direct and MCP requests returned HTTP 403 with a provider error about proxy or datacenter networks.
+The MCP integration test uses an HTTP client and server with fixture provider responses and a reviewed proof fixture. It verifies Discord caption search and pagination, screenshot extraction, both baskets, fee math, lookups by either side and face equivalents, and reload of both Discord and legacy screenshot index entries. It also covers empty results, invalid responses, network failures, HTTP 403, timeouts, HTTP 429, and missing credentials.
 
 Live checks against Black Iron Antlers covered item search, Rolimon's assigned Value and sale records, two RoUtility trade pages, and Roblox collectible resale history. A live Super Super Happy Face lookup also returned Roblox bundle resale history. Rolimon's item-profile request returned HTTP 403 during the Black Iron Antlers run. The tool reported that daily sales field as unavailable while returning data from the other sources.
 
-A live local MCP request for `{"query":"BIA","limit":30}` returned 12 unique proofs, with `providerCount: 12` and `hasMore: false`. Page 2 returned zero posts. Direct Nevos searches by ID, full name, and acronym returned the same 12 post IDs. The BIA integration fixture supplied 31 posts through a name fallback and verified that Roxol returned 30 on page 1 and the remaining post on page 2.
+The BIA integration fixture supplied 31 unique matching posts across acronym and full-name searches and verified that Roxol returned 30 on page 1 and the remaining post on page 2.
+
+Live local MCP checks against Discord collected 171 matching BIA posts and 190 matching SKOTN posts within the bounded search. Both returned two distinct MCP pages and an original PNG through `get_trade_proof_image`. A trade-context request returned the original Discord links for both items.
 
 Copy history fixtures cover both input types, validation, pagination, cache reuse, hidden and previous-owner records, missing copies, and unavailable data. A live local MCP call for Sapphire Drool UAID `84184655` returned a hidden-owner observation. Two live pages for Goldrow collectible instance `c90b0e8f-45ce-4cb9-9a4c-9f68cce9b3f9` confirmed newest-first pagination. A missing UAID returned `not_found`.
 

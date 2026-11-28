@@ -8,6 +8,13 @@ export const proofOrigin = Object.freeze({
   url: "https://discord.com/channels/415246288779608064/535250426061258753",
 });
 export const proofImage = /^https:\/\/nevos-extension\.com\/api\/proofs\/images\/(\d{5,32})$/;
+export const discordAttachment = /^discord-attachment:(\d{17,20}):(\d{17,20})$/;
+export const proofAttachment = z.string().refine((value) => discordAttachment.test(value) || proofImage.test(value),
+  "Use an attachment reference returned by Roxol.");
+export function proofAttachmentFileKey(value) {
+  const discord = discordAttachment.exec(value);
+  return discord ? `discord-${discord[2]}` : proofImage.exec(value)?.[1];
+}
 const nevosNetworkRejection = "Proofs are not available from proxy or datacenter networks.";
 const id = z.string().regex(/^[1-9]\d{0,19}$/);
 const hash = z.string().regex(/^[0-9a-f]{64}$/i);
@@ -53,7 +60,7 @@ async function readNevosForbiddenMessage(body) {
   }
 }
 
-export function createProofClient(env = process.env) {
+export function createNevosProofClient(env = process.env) {
   const baseUrl = (env.ROXOL_PROOFS_URL || "https://nevos-extension.com/api/proofs/search").replace(/\/+$/, "");
   const token = env.ROXOL_PROOFS_TOKEN?.trim();
   const mode = env.ROXOL_PROOFS_SEC_FETCH_MODE || "cors";
@@ -143,35 +150,40 @@ export function createProofClient(env = process.env) {
 
   async function readImage(url) {
     if (!token || !proofImage.test(url)) return null;
-    const response = await fetch(url, {
+    return downloadProofImage(url, {
       headers: { ...headers, Accept: "image/*" }, mode, redirect: "error", signal: AbortSignal.timeout(10_000),
     });
-    if (!response.ok || !response.body) {
-      void response.body?.cancel().catch(() => {});
-      return null;
-    }
-    const reader = response.body.getReader();
-    const chunks = [];
-    let size = 0;
-    try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        size += value.length;
-        if (size > 5 * 1024 * 1024) return null;
-        chunks.push(value);
-      }
-    } finally {
-      void reader.cancel().catch(() => {});
-    }
-    const bytes = Buffer.concat(chunks);
-    const mime = bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) ? "png"
-      : bytes.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex")) ? "jpeg"
-      : bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP" ? "webp" : null;
-    return mime ? { bytes, mime } : null;
   }
 
   return Object.assign(readLiveProofs, { readImage });
+}
+
+export async function downloadProofImage(url, options, request = fetch) {
+  const response = await request(url, options);
+  if (!response.ok || !response.body) {
+    void response.body?.cancel().catch(() => {});
+    return null;
+  }
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > 5 * 1024 * 1024) return null;
+      chunks.push(value);
+    }
+  } finally {
+    void reader.cancel().catch(() => {});
+  }
+  const bytes = Buffer.concat(chunks);
+  const mime = bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) ? "png"
+    : bytes.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex")) ? "jpeg"
+    : /^(?:GIF87a|GIF89a)$/.test(bytes.toString("ascii", 0, 6)) ? "gif"
+    : bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP" ? "webp" : null;
+  return mime ? { bytes, mime } : null;
 }
 
 export function indexProof(index, record, baskets) {

@@ -4,7 +4,7 @@ import path from "node:path";
 import { z } from "zod";
 import targets from "../../extension/shared/market_targets.js";
 import { findItems } from "./data.mjs";
-import { indexProof, proofImage, proofRobux } from "./proofs.mjs";
+import { discordAttachment, indexProof, proofAttachment, proofAttachmentFileKey, proofRobux } from "./proofs.mjs";
 
 const id = z.string().regex(/^[1-9]\d{0,19}$/);
 const kind = z.enum(["asset", "bundle"]);
@@ -32,13 +32,14 @@ const target = z.strictObject({ id, kind });
 const saved = z.strictObject({
   postId: z.string().regex(/^\d{17,20}$/),
   postedAt: z.iso.datetime().nullable(),
-  attachment: z.string().regex(proofImage),
+  attachment: proofAttachment,
   evidenceSha256: z.string().regex(/^[0-9a-f]{64}$/),
   baskets: z.tuple([z.array(indexedItem).max(20), z.array(indexedItem).max(20)]),
   payments: z.tuple([payment, payment]),
   itemTotals: z.tuple([itemTotals, itemTotals]),
   aliases: z.array(target),
-});
+}).refine(({ attachment, postId }) => !discordAttachment.test(attachment) ||
+  discordAttachment.exec(attachment)[1] === postId, "Discord attachment must belong to the indexed post.");
 const format = { type: "json_schema", name: "roblox_trade_screenshot", strict: true,
   schema: z.toJSONSchema(extraction) };
 delete format.schema.$schema;
@@ -101,7 +102,7 @@ export async function createScreenshotIndex({ env, readImage, readAliases }) {
   if (directory) {
     await mkdir(directory, { recursive: true });
     for (const name of await readdir(directory)) {
-      if (!/^\d{17,20}-\d{5,32}\.json$/.test(name)) continue;
+      if (!/^\d{17,20}-(?:discord-\d{17,20}|\d{5,32})\.json$/.test(name)) continue;
       const record = saved.parse(JSON.parse(await readFile(path.join(directory, name), "utf8")));
       add(record);
     }
@@ -156,7 +157,7 @@ export async function createScreenshotIndex({ env, readImage, readAliases }) {
     const record = { postId: post.postId, postedAt: post.postedAt, attachment, evidenceSha256, baskets, payments,
       itemTotals: [sideA.itemTotals, sideB.itemTotals], aliases: indexedAliases };
     if (directory) {
-      const filename = path.join(directory, `${post.postId}-${proofImage.exec(attachment)[1]}.json`);
+      const filename = path.join(directory, `${post.postId}-${proofAttachmentFileKey(attachment)}.json`);
       const temporary = `${filename}.${randomUUID()}.tmp`;
       try {
         await writeFile(temporary, JSON.stringify(record), { flag: "wx" });
