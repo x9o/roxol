@@ -44,7 +44,7 @@ Sign in and open Roblox **Trades**. Roxol adds comparisons to the trade lists, t
 - **Compare both offers.** Open a trade or build an offer to see separate rows for Total Value (RAP), Rolimon's Value, and average Demand across rated copies. Each row follows Roblox's trade layout with the label on the left and the figure on the right. The badges between the offers show the signed RAP and Value differences. Roxol counts outgoing Robux in full and incoming Robux after the trade fee.
 - **Inspect individual items.** Trade and inventory-picker cards show RAP, Value or a labeled fallback, demand or average daily sales, and projected warnings where available. Open an item's sales history or follow its Rolimon's link to check the numbers behind the offer.
 
-> **Screenshot placeholder — Roblox Trades.** Show a selected trade with its list preview visible, both offers and their demand rows, and the signed RAP and Value badges between the offers.
+![Roblox Trades showing both offers, their RAP, Value, and demand totals, and the signed RAP and Value differences between them](docs/screenshots/roblox-trades.png)
 
 ## Connect Roxol MCP
 
