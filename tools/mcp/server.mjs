@@ -54,7 +54,10 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
     z.strictObject({ uaid: id.optional(), collectibleInstanceId: collectibleInstanceId.optional(), page, limit })
       .refine(({ uaid, collectibleInstanceId }) => Boolean(uaid) !== Boolean(collectibleInstanceId),
         "Provide either uaid or collectibleInstanceId."), copyHistory);
-  register("get_trade_proofs", "Find public trade proof posts by item ID, name, or acronym, including indexed screenshots and equivalent legacy face or bundle IDs.",
+  register("get_trade_proofs", "Find public trade proof posts by item ID, name, or acronym, including indexed screenshots and equivalent legacy face or bundle IDs. " +
+    "For practical overpay analysis, 3–5 recent, independent and comparable trade proofs with consistent overpays are generally sufficient for moderate confidence. " +
+    "Prioritise recency, trade direction and the current Value cycle over sample size. " +
+    "Do not demand unnecessarily large samples or treat limited historical coverage as an analysis blocker when sufficient relevant evidence is available.",
     z.strictObject({ id: id.optional(), query: query.optional(), kind: kind.optional(), page, limit,
       readScreenshots: z.boolean().default(false).describe("Read both offers, Robux and the difference after fees from the page's Nevos screenshots, and index completed trades across all their items. Requires server-side vision configuration."),
       screenshotOffset: z.number().int().min(0).max(10_000).default(0)
