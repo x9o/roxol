@@ -113,7 +113,7 @@ const RoxolProofOverpay = (() => {
       outgoingRobux: given.cash, incomingRobux, incomingRobuxOffered: received.cash };
   }
 
-  function summarize(data, item, feed) {
+  function summarize(data, item, feed, attachmentKey = (url) => isAttachment(url) ? url : null) {
     const aliases = itemLookup(item, data, feed);
     const seenPosts = new Set();
     const seenImages = new Set();
@@ -123,11 +123,15 @@ const RoxolProofOverpay = (() => {
       seenPosts.add(proof.id);
       const trade = readTrade(proof.content, aliases);
       if (!trade) continue;
-      const attachments = Array.isArray(proof.attachments) ? [...new Set(proof.attachments.filter(isAttachment))] : [];
-      if (attachments.some((url) => seenImages.has(url))) continue;
-      for (const url of attachments) seenImages.add(url);
+      const attachments = new Map();
+      for (const url of Array.isArray(proof.attachments) ? proof.attachments : []) {
+        const image = attachmentKey(url);
+        if (image && !attachments.has(image)) attachments.set(image, url);
+      }
+      if ([...attachments.keys()].some((image) => seenImages.has(image))) continue;
+      for (const image of attachments.keys()) seenImages.add(image);
       const time = Number(proof.timestamp) || Number((BigInt(proof.id) >> 22n) + 1420070400000n);
-      trades.push({ ...trade, attachments, discordUrl: `${channel}/${proof.id}`,
+      trades.push({ ...trade, attachments: [...attachments.values()], discordUrl: `${channel}/${proof.id}`,
         date: time > 0 && time <= 8.64e15 ? new Date(time).toISOString() : null });
     }
     trades.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));

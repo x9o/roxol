@@ -1,5 +1,17 @@
 # Roxol overpay tools
 
+## Compare Discord and Nevos proof coverage
+
+From the repository root, use Node.js 22 or later and the existing MCP dependencies (`npm ci --prefix tools/mcp`). Run this PowerShell command, then enter the authorized Discord credential at the hidden prompt. The credential is passed over standard input for this run.
+
+```powershell
+([System.Net.NetworkCredential]::new('', (Read-Host 'Discord credential' -AsSecureString))).Password | node tools/overpay/compare-bia-proofs.mjs
+```
+
+The comparison reads up to four 25-result pages each for `BIA` and `Black Iron Antlers` in Rolimon’s `value-requests` channel, ordered newest first. It checks the first image of up to eight recent posts per source and uses the Marketplace caption parser and current Rolimon’s prices for both Median OP samples. Discord's search counts include raw matches. Compare the post IDs, dates, shared captions, and qualifying proof counts within the sampled window. The report omits credential values, caption contents, and signed image URLs. A rejected Discord request stops pagination and retains results collected so far.
+
+Nevos uses the existing MCP credential settings from the environment or `tools/mcp/.env`. Run `node tools/overpay/compare-bia-proofs.mjs --nevos-only` to check that side independently. The comparison leaves the running MCP and Marketplace proof providers in place. Run `node tools/overpay/compare-bia-proofs.test.mjs` for the fixture checks.
+
 ## Historical valuation of RoUtility trades
 
 From the repository root, use Node.js 22 or later and Microsoft Edge on Windows. Export trades from **View trades** on a Roblox Marketplace page, then run the resolver. A raw RoUtility response with a `trades` array is also accepted.
