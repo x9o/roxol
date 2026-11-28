@@ -119,12 +119,17 @@ export async function summarizeSample(records, feed, checkImage, attachmentKey) 
 async function main() {
   if (!process.argv.slice(2).every((arg) => arg === "--nevos-only")) throw new Error("Unexpected argument");
   const nevosOnly = process.argv.includes("--nevos-only");
-  const token = nevosOnly ? null : (await text(process.stdin)).trim();
-  if (!nevosOnly && !token) throw new Error("Missing Discord credential");
   try {
     process.loadEnvFile(new URL("../mcp/.env", import.meta.url));
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
+  }
+  const token = nevosOnly ? null : process.env.ROXOL_DISCORD_TOKEN?.trim() ||
+    (!process.stdin.isTTY && (await text(process.stdin)).trim());
+  if (!nevosOnly && !token) {
+    console.error("Set ROXOL_DISCORD_TOKEN in tools/mcp/.env or pass the Discord credential on standard input.");
+    process.exitCode = 1;
+    return;
   }
   const readNevos = createProofClient();
   const [discord, nevos, feed] = await Promise.all([

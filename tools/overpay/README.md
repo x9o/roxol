@@ -2,7 +2,13 @@
 
 ## Compare Discord and Nevos proof coverage
 
-From the repository root, use Node.js 22 or later and the existing MCP dependencies (`npm ci --prefix tools/mcp`). Run this PowerShell command, then enter the authorized Discord credential at the hidden prompt. The credential is passed over standard input for this run.
+From the repository root, use Node.js 22 or later and the existing MCP dependencies (`npm ci --prefix tools/mcp`). Set `ROXOL_DISCORD_TOKEN` in the environment or in the Git-ignored `tools/mcp/.env` file to reuse the authorized Discord credential across runs. Then run the comparison.
+
+```powershell
+node tools/overpay/compare-bia-proofs.mjs
+```
+
+For a one-time run without a saved credential, use the hidden PowerShell prompt and pass the credential on standard input.
 
 ```powershell
 ([System.Net.NetworkCredential]::new('', (Read-Host 'Discord credential' -AsSecureString))).Password | node tools/overpay/compare-bia-proofs.mjs
