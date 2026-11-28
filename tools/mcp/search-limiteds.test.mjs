@@ -16,6 +16,7 @@ test("MCP ranks Limiteds by price, volume, historical change and discount", asyn
   t.mock.method(Date, "now", () => realNow() + clockOffset);
   const detailBatches = [];
   const historyRequests = [];
+  let changeLogRequests = 0;
   t.mock.method(globalThis, "fetch", (input, init) => {
     const url = new URL(input instanceof Request ? input.url : input);
     if (url.hostname === "127.0.0.1") return originalFetch(input, init);
@@ -33,6 +34,19 @@ test("MCP ranks Limiteds by price, volume, historical change and discount", asyn
         6: row("Unknown Hat", 125000, 150000),
         ...broad,
       }, bundles: { 1: row("Bundle", 120000, 150000) } });
+    }
+    if (url.pathname === "/valuechanges") {
+      changeLogRequests++;
+      if (clockOffset < 120_000) return new Response(null, { status: 503 });
+      return new Response(`var value_changes = ${JSON.stringify([
+        [secondsAt(1), 100, 1, 1, 10000, 15000],
+        [secondsAt(1), 1, 2, 1, 140000, 150000],
+        [secondsAt(2), 100, 1, 1, 12000, 10000],
+        [secondsAt(2), 1, 1, 1, 149000, 150000],
+        [secondsAt(2), 5, 1, 1, 180000, 199000],
+        [secondsAt(3), 160, 1, 1, 15000, 15060],
+        [secondsAt(25), 100, 1, 1, null, 12000],
+      ])};`);
     }
     if (url.pathname === "/v1/catalog/items/details") {
       const { items } = JSON.parse(init.body);
@@ -177,4 +191,30 @@ test("MCP ranks Limiteds by price, volume, historical change and discount", asyn
   assert.equal(last.scope.nextCandidateOffset, null);
   assert.equal(last.matched, 1);
   assert.equal(last.items[0].name, "Broad 0");
+
+  clockOffset = 120_000;
+  const beforeLog = historyRequests.length;
+  const all = await search({ ...broad, change: { ...broad.change, days: 7 } });
+  assert.equal(all.status, "ok");
+  assert.equal(all.scope.evaluated, 61);
+  assert.equal(all.scope.nextCandidateOffset, null);
+  assert.equal(all.matched, 2);
+  assert.equal(all.items[0].name, "Broad 0");
+  assert.equal(all.items[0].change.difference, 3000);
+  assert.equal(all.items[0].change.source, "https://www.rolimons.com/valuechanges");
+  assert.equal(all.sources.valueChangeLog.windowCovered, true);
+  const logReads = changeLogRequests;
+  const narrowed = await search({ demand: ["Amazing"], change: { basis: "value", days: 7, direction: "rising" } });
+  assert.deepEqual(narrowed.items.map(({ kind, id, change }) => [kind, id, change.difference]), [
+    ["asset", "5", 20000], ["bundle", "1", 10000], ["asset", "1", 1000],
+  ]);
+  assert.equal(narrowed.items[0].change.source, "https://www.rolimons.com/item-value-changes/5");
+  assert.equal(changeLogRequests, logReads);
+  assert.equal(historyRequests.length, beforeLog);
+
+  const uncovered = await search({ ...broad, change: { ...broad.change, days: 30 } });
+  assert.equal(uncovered.status, "partial");
+  assert.equal(uncovered.sources.valueChangeLog.windowCovered, false);
+  assert.equal(uncovered.scope.nextCandidateOffset, 60);
+  assert.equal(uncovered.matched, 0);
 });

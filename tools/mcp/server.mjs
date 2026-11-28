@@ -39,7 +39,7 @@ function createMcp(proofs, readLiveProofs, proofOptions, instanceId) {
 
   register("find_items", "Find limited assets and bundles by Roblox ID, name, or acronym.",
     z.strictObject({ query, limit }), findItems);
-  register("search_limiteds", "Rank Roblox Limiteds by assigned Rolimon's Value, RAP, Roblox lowest resale ask, demand, 7- or 30-day sales volume, measured Value or RAP change, or discount to Value. Filter by price, demand, trend, gear, projected status, volume, change direction or minimum discount. Returns recent sale evidence and the inputs to each rank. Check scope.changeGaps for unevaluated items. If scope.retryAt is set, rerun the same page at or after that UTC time and use the refreshed result before advancing to nextCandidateOffset.",
+  register("search_limiteds", "Rank Roblox Limiteds by assigned Rolimon's Value, RAP, Roblox lowest resale ask, demand, 7- or 30-day sales volume, measured Value or RAP change, or discount to Value. Filter by price, demand, trend, gear, projected status, volume, change direction or minimum discount. Value change rankings use Rolimon's shared changelog when it covers the requested window. Returns recent sale evidence and the inputs to each rank. Check scope.changeGaps and scope.nextCandidateOffset for incomplete coverage. If scope.retryAt is set, rerun the same page at or after that UTC time.",
     searchLimitedsInput, searchLimiteds);
   register("get_item_stats", "Get public item statistics by provider, including RAP, assigned Value, demand, supply and best price where available.",
     z.strictObject(target), itemStats);

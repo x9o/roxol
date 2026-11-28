@@ -1,7 +1,7 @@
 import { z } from "zod";
 import market from "../../extension/background/public-market.js";
 import targets from "../../extension/shared/market_targets.js";
-import { readValueChanges, rolimonsFeed } from "./data.mjs";
+import { readValueChangeLog, readValueChanges, rolimonsFeed } from "./data.mjs";
 
 const day = 86_400_000;
 const historyBatchSize = 60;
@@ -118,6 +118,8 @@ function measuredChange({ basis, days }, item, data, cutoff, now) {
       const value = prior ? next.after : next.before;
       start = targets.amount(value) || null;
       startEvidenceAt = start === null ? null : iso(next.time);
+    } else if (!latest && data.windowCovered) {
+      start = end;
     }
   } else {
     const sales = data.sales?.filter(({ time }) => time <= now) ?? [];
@@ -141,8 +143,22 @@ function trackedCoversAll({ count, sales }) {
   return count !== null && count === sales?.length;
 }
 
-function valueHistory(item) {
+function valueHistory(item, log, cutoff) {
   if (!item.value) return { status: "not_applicable", latestChangeAt: null };
+  if (log) {
+    const changes = log.changesByItem.get(targets.keyOf(item)) ?? [];
+    const latest = changes.at(-1);
+    const priorIndex = changes.findLastIndex(({ time }) => time <= cutoff);
+    // A discontinuity before the cutoff does not affect the window once its starting assignment is known.
+    const continuous = changes.slice(priorIndex + 1).every(({ time, before }, index) => {
+      const previous = changes[priorIndex + index];
+      return !previous || (time > previous.time && before === previous.after);
+    });
+    if (continuous && (!latest || latest.after === item.value)) {
+      return { status: log.status, source: log.source, checkedAt: log.checkedAt,
+        changes, windowCovered: true, latestChangeAt: latest ? iso(latest.time) : null };
+    }
+  }
   return readValueChanges(item).then(({ changes, ...metadata }) => ({
     ...metadata, changes,
     latestChangeAt: changes?.length ? iso(changes.at(-1).time) : null,
@@ -171,11 +187,14 @@ export async function searchLimiteds({
   order = sort === "lowest_ask" || (["change", "change_percent"].includes(sort) && change?.direction === "falling")
     ? "asc" : "desc", limit, candidateOffset,
 }) {
-  const feed = await market.readItemFeed();
+  const [feed, changeLog] = await Promise.all([
+    market.readItemFeed(), change?.basis === "value" ? readValueChangeLog() : null,
+  ]);
   const now = Date.now();
   const salesDays = sales?.days ?? 30;
   const from = now - salesDays * day;
   const cutoff = now - (change?.days ?? 0) * day;
+  const coveredLog = changeLog?.oldest <= cutoff && changeLog?.newest <= now ? changeLog : null;
   const rankByVolume = sort === "sales" || sales?.minSold !== undefined;
   const usesAsk = price?.basis === "lowest_ask" || minDiscountPercent !== undefined || ["lowest_ask", "discount"].includes(sort);
   const usesDiscount = minDiscountPercent !== undefined || sort === "discount";
@@ -185,7 +204,13 @@ export async function searchLimiteds({
   const scope = { catalogItems: feed?.size ?? 0, candidates: 0, evaluated: 0, candidateOffset,
     nextCandidateOffset: null, missingCatalogData: 0, missingVolumeData: 0, missingChangeData: 0,
     changeGaps: [], retryAt: null };
-  const response = { asOf: iso(now), sort: { by: sort, order }, salesDays, scope, sources: { rolimons: source } };
+  const response = { asOf: iso(now), sort: { by: sort, order }, salesDays, scope, sources: {
+    rolimons: source,
+    ...(changeLog && { valueChangeLog: {
+      source: changeLog.source, status: changeLog.status, checkedAt: changeLog.checkedAt ?? null,
+      oldestAt: changeLog.oldest ? iso(changeLog.oldest) : null, windowCovered: Boolean(coveredLog),
+    } }),
+  } };
   if (!feed) return { status: "unavailable", ...response, matched: 0, items: [] };
 
   let candidates = [...feed].map(([key, row]) => {
@@ -216,7 +241,7 @@ export async function searchLimiteds({
   }
 
   scope.candidates = candidates.length;
-  if (historySearch) {
+  if (historySearch && (!coveredLog || rankByVolume || candidateOffset > 0)) {
     candidates.sort((a, b) => (rankByVolume ? b.demandRating - a.demandRating : 0) ||
       (b.value ?? b.rap ?? 0) - (a.value ?? a.rap ?? 0) || compareItems(a, b));
     const end = candidateOffset + historyBatchSize;
@@ -233,7 +258,7 @@ export async function searchLimiteds({
     }
     if (sales?.minSold !== undefined && volume.copiesSold < sales.minSold) return null;
     const [changes, tracked] = await Promise.all([
-      change?.basis === "value" ? valueHistory(item) : null,
+      change?.basis === "value" ? valueHistory(item, coveredLog, cutoff) : null,
       change?.basis === "rap" ? market.readTrackedSales(item) : null,
     ]);
     const delta = change ? measuredChange(change, item, changes ?? tracked, cutoff, now) : null;

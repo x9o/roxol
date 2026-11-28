@@ -11,7 +11,9 @@ const utilityFeed = "https://routility.io/api/public/items";
 const catalog = "https://catalog.roblox.com/v1/catalog/items/details";
 const utilityCache = new Map();
 const changeCache = new Map();
+const changeLogCache = new Map();
 const copyHistoryCache = new Map();
+const valueChangeLog = "https://www.rolimons.com/valuechanges";
 let valueChangesRetryAt = 0;
 
 const unavailable = (source, httpStatus) => ({ status: "unavailable", source, httpStatus });
@@ -115,14 +117,14 @@ export function itemStatsBatch(items) {
   return items.map((item, index) => itemStats(item, details.then((rows) => rows[index])));
 }
 
-function readChanges(item, source) {
-  const known = cached(changeCache, source);
+function readChanges(cache, source, parse, cacheSize, successTTL = itemTTL) {
+  const known = cached(cache, source);
   if (known) return known;
   const rateLimited = (httpStatus) => ({
     status: "rate_limited", source, httpStatus, retryAt: new Date(valueChangesRetryAt).toISOString(),
   });
   if (Date.now() < valueChangesRetryAt) return Promise.resolve(rateLimited());
-  return remember(changeCache, source,
+  return remember(cache, source,
     request(source, {}, "text").then(({ data, status, retryAfter }) => {
       if (status === 429) {
         const now = Date.now();
@@ -132,10 +134,46 @@ function readChanges(item, source) {
         return rateLimited(status);
       }
       if (status !== 200) return unavailable(source, status);
-      const history = valuation.parseHistory(data, item, undefined, source, undefined, { allowEmpty: true });
-      return history ? { ...observed(source, Date.now()), changes: history.changes } :
+      const history = parse(data);
+      return history ? { ...observed(source, Date.now()), ...history } :
         { ...unavailable(source, status), reason: "invalid_history" };
-    }).catch(() => unavailable(source)), 120, (result) => result.status === "rate_limited" ? 0 : itemTTL);
+    }).catch(() => unavailable(source)), cacheSize, (result) => result.status === "rate_limited" ? 0 : successTTL);
+}
+
+function parseChangeLog(html) {
+  const match = /\bvar value_changes\s*=\s*(\[[^;]*\]);/.exec(html);
+  if (!match) return null;
+  let rows;
+  try {
+    rows = JSON.parse(match[1]);
+  } catch {
+    return null;
+  }
+  if (!rows.length) return null;
+  const changesByItem = new Map();
+  let oldest = Infinity;
+  let newest = 0;
+  for (const row of rows) {
+    if (!Array.isArray(row) || row.length !== 6) return null;
+    const [seconds, rawId, type, field, before, after] = row;
+    const time = valuation.timestamp(seconds);
+    const id = idOf(rawId);
+    if (!time || !id || (type !== 1 && type !== 2) || !Number.isInteger(field)) return null;
+    oldest = Math.min(oldest, time);
+    newest = Math.max(newest, time);
+    if (field !== 1) continue;
+    if (![before, after].every((value) => value === null || targets.amount(value) > 0)) return null;
+    const key = keyOf({ kind: type === 2 ? "bundle" : "asset", id });
+    if (!changesByItem.has(key)) changesByItem.set(key, []);
+    changesByItem.get(key).push({ time, before, after });
+  }
+  if (!changesByItem.size) return null;
+  for (const changes of changesByItem.values()) changes.sort((a, b) => a.time - b.time);
+  return { oldest, newest, changesByItem };
+}
+
+export function readValueChangeLog() {
+  return readChanges(changeLogCache, valueChangeLog, parseChangeLog, 1, 60_000);
 }
 
 function pageOf(rows, page, limit) {
@@ -171,7 +209,9 @@ export async function history(item, { series, page, limit }) {
 
 export function readValueChanges(item) {
   const segment = item.kind === "bundle" ? "bundle-value-changes" : "item-value-changes";
-  return readChanges(item, `https://www.rolimons.com/${segment}/${item.id}`);
+  const source = `https://www.rolimons.com/${segment}/${item.id}`;
+  return readChanges(changeCache, source,
+    (html) => valuation.parseHistory(html, item, undefined, source, undefined, { allowEmpty: true }), 120);
 }
 
 export async function tradeObservations({ assetId, page }) {
