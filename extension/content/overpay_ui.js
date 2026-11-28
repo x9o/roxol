@@ -58,7 +58,7 @@ const RoxolOverpay = (() => {
   function render(panel, data, assetId) {
     if (data.median !== null) {
       const rate = element("dl", "roxol-overpay-rate");
-      rate.append(stat("Median downgrade OP", figure(data.median)));
+      rate.append(stat("Median OP", ui.format(data.median)));
       panel.append(rate);
     }
 
@@ -72,7 +72,7 @@ const RoxolOverpay = (() => {
     details.append(
       element("summary", "", "Estimate details"), stats,
       element("p", "roxol-overpay-note",
-        "Uses both baskets in clear Nevos downgrade captions across all available dates. Incoming Robux count after fees and outgoing Robux count in full. Negative OP means the owner received less than they gave."),
+        "Uses the median of the absolute OP amounts from qualifying Nevos downgrades as a reference for either direction. Proof rows show the signed result for the target owner. Incoming Robux count after fees and outgoing Robux count in full."),
     );
     const download = ui.button("Download proof audit");
     download.addEventListener("click", () => ui.downloadJson(`roxol-overpay-${assetId}.json`, {

@@ -136,7 +136,7 @@ const RoxolProofOverpay = (() => {
       return sorted.length ? (sorted[middle] + sorted[Math.ceil(sorted.length / 2) - 1]) / 2 : null;
     };
     return {
-      status: "ok", channel, trades, median: median(trades.map(({ net }) => net)),
+      status: "ok", channel, trades, median: median(trades.map(({ net }) => Math.abs(net))),
       postCount: seenPosts.size, unpricedPosts: seenPosts.size - trades.length,
       partial: Number(data.count) > seenPosts.size,
     };

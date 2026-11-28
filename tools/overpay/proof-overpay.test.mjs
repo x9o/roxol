@@ -29,7 +29,7 @@ test("pools all dates and orients the full baskets around the focal owner", () =
       post(5, "2x Add + Third / FI\n10k vs 10k"),
     ],
   }, item, feed);
-  assert.equal(result.median, 500);
+  assert.equal(result.median, 1000);
   assert.equal(result.postCount, 5);
   assert.equal(result.unpricedPosts, 1);
   assert.equal(result.partial, true);
@@ -40,6 +40,15 @@ test("pools all dates and orients the full baskets around the focal owner", () =
   assert.equal(proofOverpay.isAttachment(`${image}?redirect=anything`), false);
 });
 
+test("takes the median of the OP magnitudes and preserves the signed evidence", () => {
+  const result = proofOverpay.summarize({ results: [
+    post(1, "FI / Smaller + Third\n471k vs 495k"),
+    post(2, "Smaller + Third / FI\n570k vs 600k"),
+  ] }, item, feed);
+  assert.equal(result.median, 27000);
+  assert.deepEqual(result.trades.map(({ net }) => net), [24000, -30000]);
+});
+
 test("credits incoming Robux after fees and debits all outgoing Robux", () => {
   const result = proofOverpay.summarize({ results: [
     post(1, "Smaller 4,001 Robux / FI + Add + 200 RBX\nItem totals: 7.5k vs 11k"),
@@ -47,7 +56,7 @@ test("credits incoming Robux after fees and debits all outgoing Robux", () => {
     post(3, "FI + Add + 300 Robux / Smaller + Third\nItem values: 11k vs 11k"),
   ] }, item, feed);
   assert.deepEqual(result.trades.map(({ net }) => net), [-899, 1350, -300]);
-  assert.equal(result.median, -300);
+  assert.equal(result.median, 899);
   assert.deepEqual(result.trades[0], {
     net: -899,
     given: "FI + Add + 200 RBX",
