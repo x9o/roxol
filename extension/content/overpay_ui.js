@@ -1,21 +1,8 @@
 const RoxolOverpay = (() => {
   const ui = RoxolMarketUI;
   const { element, tradingFigure: figure, tradingStat: stat } = ui;
-  const amount = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
   const date = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" });
   const proofChannel = "https://discord.com/channels/415246288779608064/535250426061258753";
-
-  function direction(label, action, median) {
-    const row = stat(label, median === 0 ? "Even trade" : "");
-    if (median !== 0) {
-      row.lastElementChild.append(
-        `You typically ${action} `,
-        element("strong", "roxol-overpay-amount", amount.format(Math.abs(median))),
-        median > 0 ? " more" : " less",
-      );
-    }
-    return row;
-  }
 
   async function showProof(trade, label) {
     const body = ui.showDialog(`Trade proof · ${label}`);
@@ -50,7 +37,8 @@ const RoxolOverpay = (() => {
   function proofRow(trade) {
     const row = element("li", "roxol-overpay-trade");
     const details = element("div");
-    const basket = element("div", "roxol-overpay-basket", trade.opposite);
+    const given = element("div", "roxol-overpay-basket", `Give ${trade.given}`);
+    const received = element("div", "roxol-overpay-basket", `Receive ${trade.opposite}`);
     const label = Number.isFinite(Date.parse(trade.date)) ? date.format(new Date(trade.date)) : "View proof";
     const proof = trade.attachments.length
       ? element("button", "roxol-link roxol-proof-trigger", label)
@@ -60,37 +48,31 @@ const RoxolOverpay = (() => {
       proof.setAttribute("aria-label", `Open proof attachments for ${label}`);
       proof.addEventListener("click", () => void showProof(trade, label));
     }
-    details.append(basket, proof);
+    details.append(given, received, proof);
     const value = element("div", "roxol-overpay-trade-values");
     value.append(figure(trade.net));
-    if (trade.focalValue) value.append(figure(trade.net / trade.focalValue, true));
     row.append(details, value);
     return row;
   }
 
   function render(panel, data, assetId) {
     if (data.median !== null) {
-      const directions = element("dl", "roxol-overpay-directions roxol-overpay-rate");
-      directions.append(
-        direction("Upgrade into this item", "pay", data.median),
-        direction("Downgrade this item", "receive", data.median),
-      );
-      panel.append(directions);
+      const rate = element("dl", "roxol-overpay-rate");
+      rate.append(stat("Median downgrade OP", figure(data.median)));
+      panel.append(rate);
     }
 
     const details = element("details", "roxol-disclosure roxol-overpay-details");
     const stats = element("dl", "roxol-stat-grid");
     stats.append(
-      stat("Priced trades", ui.format(data.trades.length)),
+      stat("Priced downgrades", ui.format(data.trades.length)),
       stat("Proof posts", ui.format(data.postCount)),
-      stat("Median net overpay", figure(data.median)),
-      stat("Median net overpay %", figure(data.medianPercent == null ? null : data.medianPercent / 100, true)),
     );
     if (data.unpricedPosts) stats.append(stat("Posts outside the estimate", ui.format(data.unpricedPosts)));
     details.append(
       element("summary", "", "Estimate details"), stats,
       element("p", "roxol-overpay-note",
-        "Uses the totals reported in proof captions of any age where this item was traded on its own. A caption can also report the overpay directly. The estimate reflects values and any Robux as reported."),
+        "Uses both baskets in clear Nevos downgrade captions across all available dates. Incoming Robux count after fees and outgoing Robux count in full. Negative OP means the owner received less than they gave."),
     );
     const download = ui.button("Download proof audit");
     download.addEventListener("click", () => ui.downloadJson(`roxol-overpay-${assetId}.json`, {
@@ -132,7 +114,7 @@ const RoxolOverpay = (() => {
       }
       const notices = [];
       if (data.partial) notices.push("Nevos returned only part of its proof history.");
-      if (data.median === null) notices.push("No proof captions with clear overpay for this item.");
+      if (data.median === null) notices.push("No proof captions with a clear downgrade and item totals for this item.");
       status.textContent = notices.join(" ");
       status.hidden = !notices.length;
       render(panel, data, assetId);

@@ -919,31 +919,14 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
   margin-bottom: 5px;
 }
 .roxol-overpay-header .roxol-link { font-size: var(--roxol-text-small); }
-.roxol-overpay-rate { margin-block: 10px; }
-.roxol-overpay-directions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 0;
-}
-.roxol-overpay-directions > div { min-inline-size: 0; padding: 2px 8px 2px 0; }
-.roxol-overpay-directions > div + div {
-  border-inline-start: 1px solid var(--roxol-line);
-  padding-inline: 10px 0;
-}
-.roxol-overpay-directions dt { font-size: .875rem; font-weight: 650; }
-.roxol-overpay-directions dd {
+.roxol-overpay-rate { margin: 6px 0 8px; }
+.roxol-overpay-rate dt { font-size: .875rem; font-weight: 650; }
+.roxol-overpay-rate dd {
   margin: 2px 0 0;
-  color: var(--roxol-muted);
-  font-size: var(--roxol-text-small);
-  overflow-wrap: break-word;
-}
-.roxol-overpay-amount {
-  color: var(--roxol-ink);
   font-size: 1rem;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
 }
-.roxol-overpay-caption, .roxol-overpay-note {
+.roxol-overpay-note {
   color: var(--roxol-muted);
   font-size: var(--roxol-text-small);
 }
@@ -964,7 +947,6 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
   border-bottom: 1px solid var(--roxol-line);
 }
 .roxol-overpay-trade-values { display: grid; align-content: center; text-align: end; font-weight: 600; }
-.roxol-overpay-trade-values > :last-child { font-size: var(--roxol-text-small); }
 .roxol-proof-trigger {
   background: none;
   border: 0;
@@ -980,15 +962,6 @@ div:has(> .roxol-profile-native) { flex-wrap: wrap; }
 .roxol-proof-images:not(:empty) { margin-block-end: 12px; }
 .roxol-proof-images img { display: block; max-inline-size: 100%; block-size: auto; }
 
-@container (max-width: 235px) {
-  .roxol-overpay-directions { grid-template-columns: minmax(0, 1fr); gap: 5px; }
-  .roxol-overpay-directions > div + div {
-    border-inline-start: 0;
-    border-block-start: 1px solid var(--roxol-line);
-    padding-inline: 0;
-    padding-block-start: 5px;
-  }
-}
 @container (max-width: 390px) {
   .roxol-trade-basket { padding-inline: 5px; }
   .roxol-basket-item { gap: 4px; }

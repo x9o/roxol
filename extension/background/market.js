@@ -101,7 +101,8 @@
     if (status === 404) return RoxolProofOverpay.summarize({ results: [] }, {});
     if (status !== 200 || data?.source?.trim?.() === "edge-cache" || !Array.isArray(data?.results) ||
         (data.item_id && idOf(data.item_id) !== assetId)) return { status: "unavailable" };
-    return RoxolProofOverpay.summarize(data, { name: listingName });
+    const key = keyOf(targetOf("asset", assetId));
+    return RoxolProofOverpay.summarize(data, { key, name: listingName }, data.results.length ? await readItemFeed() : null);
   }
 
   function readOverpay(assetId, listingName) {

@@ -135,11 +135,12 @@ test("Marketplace fetches overpay directly from Nevos and preserves RoUtility tr
           assert.equal(init.headers["X-NTE-Client"], "fixture-token");
           assert.equal(init.credentials, "omit");
           return Response.json({ item_id: 101, item_name: "Page item", count: 1, results: [{
-            id: "1500000000000000000", content: "Page item / Other item\n1000 vs 1012",
+            id: "1500000000000000000", content: "Page item / 2x Small item\n1000 vs 1012",
           }] });
         }
         if (url === priceUrl) return Response.json({ success: true, items: {
           101: ["Page item", "", 60, 100, 100], 102: ["Other item", "", 110, -1, 110],
+          103: ["Small item", "", 55, -1, 55],
         } });
         assert.equal(url, historyUrl);
         const observation = (now - 60_000) / 1000;
